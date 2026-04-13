@@ -21,7 +21,7 @@ def load_raw(
     test_path:  Path | str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Load raw train and test CSVs from disk.
+    Load raw train and test CSV from disk.
 
     Paths default to <repo_root>/data/raw/*.csv so the function works
     regardless of which directory the script is launched from.

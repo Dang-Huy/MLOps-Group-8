@@ -3,7 +3,7 @@ src/data/schema.py
 ==================
 Single source of truth for the raw data contract.
 
-Input  : defined statically by the team from EDA findings
+Input  : defined statically by the team from EDA finding
 Output : schema dict + column-group lists consumed by validation.py
          and preprocessing.py
 """

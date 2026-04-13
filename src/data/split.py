@@ -6,7 +6,7 @@ Reproducible 70/15/15 train/valid/test split from a single source file.
 Design rules
 ------------
 - Uses stratified sampling to preserve class balance in all three splits.
-- Fits caps and encoders on train only -- no leakage.
+- Fit caps and encoders on train only -- no leakage.
 - Saves splits to data/processed/ for reproducibility.
 - Call order in pipeline: ingestion -> validation -> split -> preprocessing
 
