@@ -48,7 +48,7 @@ SELECTED_FEATURES: List[str] = [
     "Num_Credit_Inquiries",
     "Outstanding_Debt",
     "Credit_Utilization_Ratio",
-    "Credit_History_Age",
+    "Credit_History_Age",   # = Credit_History_Months in EDA; parsed to total months
     "Total_EMI_per_month",
     "Amount_invested_monthly",
     "Monthly_Balance",
