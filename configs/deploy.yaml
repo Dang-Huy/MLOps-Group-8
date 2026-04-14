@@ -1,0 +1,13 @@
+serving:
+  host: 0.0.0.0
+  port: 8000
+  workers: 2
+  model_path: artifacts/models/final_model_bundle.pkl
+  version: "1.0.0"
+
+decision_policy:
+  brackets:
+    Poor: {min: 0, label: "High Risk", action: reject}
+    Standard: {min: 1, label: "Medium Risk", action: manual_review}
+    Good: {min: 2, label: "Low Risk", action: approve}
+  confidence_threshold: 0.6

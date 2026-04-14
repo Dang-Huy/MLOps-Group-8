@@ -12,10 +12,10 @@ Call order
 ----------
 1. drop_pii_columns
 2. clean_numeric_columns
-3. cap_outliers          ← fit on train, apply to valid/test
+3. cap_outliers          <- fit on train, apply to valid/test
 4. parse_credit_history_age
 5. clean_categorical_columns
-6. encode_target         ← train/valid only
+6. encode_target         <- train/valid only
 """
 
 import re
@@ -36,7 +36,7 @@ from src.data.schema import (
 def drop_pii_columns(df: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in PII_COLUMNS if c in df.columns]
     df = df.drop(columns=cols)
-    print(f"[preprocessing] Dropped PII: {cols} — remaining cols: {df.shape[1]}")
+    print(f"[preprocessing] Dropped PII: {cols} -- remaining cols: {df.shape[1]}")
     return df
 
 
@@ -139,7 +139,7 @@ def cap_outliers(
 # ---------------------------------------------------------------------------
 
 def parse_credit_history_age(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert '22 Years and 9 Months' → 273 (total months)."""
+    """Convert '22 Years and 9 Months' -> 273 (total months)."""
     def _parse(val):
         if pd.isna(val):
             return np.nan
@@ -158,10 +158,15 @@ def parse_credit_history_age(df: pd.DataFrame) -> pd.DataFrame:
 def clean_categorical_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Replace known garbage placeholders with NaN for later imputation."""
     df = df.copy()
-    df["Occupation"]              = df["Occupation"].replace("_______", np.nan)
-    df["Credit_Mix"]              = df["Credit_Mix"].replace("_", np.nan)
-    df["Payment_Behaviour"]       = df["Payment_Behaviour"].replace("!@9#%8", np.nan)
-    df["Payment_of_Min_Amount"]   = df["Payment_of_Min_Amount"].replace("NM", np.nan)
+    replacements = {
+        "Occupation":            ("_______", np.nan),
+        "Credit_Mix":            ("_",       np.nan),
+        "Payment_Behaviour":     ("!@9#%8",  np.nan),
+        "Payment_of_Min_Amount": ("NM",      np.nan),
+    }
+    for col, (bad, good) in replacements.items():
+        if col in df.columns:
+            df[col] = df[col].replace(bad, good)
     return df
 
 
@@ -170,7 +175,7 @@ def clean_categorical_columns(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def encode_target(df: pd.DataFrame) -> pd.DataFrame:
-    """Poor→0, Standard→1, Good→2. Skipped silently if column absent."""
+    """Poor->0, Standard->1, Good->2. Skipped silently if column absent."""
     if TARGET_COL not in df.columns:
         return df
     df = df.copy()
@@ -199,19 +204,21 @@ def split_train_valid(
 
 
 # ---------------------------------------------------------------------------
-# Public convenience — run full preprocessing on all three splits
+# Public convenience -- run full preprocessing on all three splits
 # ---------------------------------------------------------------------------
 
 def preprocess(
     train_raw: pd.DataFrame,
     valid_raw: pd.DataFrame,
     test_raw:  pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
     """
     Run the full preprocessing sequence on all three splits.
     Outlier caps are computed from train and applied to valid/test.
 
-    Returns (train_clean, valid_clean, test_clean)
+    Returns (train_clean, valid_clean, test_clean, annual_income_cap)
+    The cap is needed downstream to store in the model bundle metadata
+    so that the serving path uses the same cap as training.
     """
     steps = [
         drop_pii_columns,
@@ -229,14 +236,14 @@ def preprocess(
     valid = _apply(valid_raw)
     test  = _apply(test_raw)
 
-    # Cap — fit on train, apply everywhere
+    # Cap -- fit on train, apply everywhere
     train, income_cap = cap_outliers(train)
     valid, _          = cap_outliers(valid, annual_income_cap=income_cap)
     test,  _          = cap_outliers(test,  annual_income_cap=income_cap)
 
-    # Encode target (test has no target column — skipped automatically)
+    # Encode target (test has no target column -- skipped automatically)
     train = encode_target(train)
     valid = encode_target(valid)
 
-    print(f"[preprocessing] Done — train {train.shape}, valid {valid.shape}, test {test.shape}")
-    return train, valid, test
+    print(f"[preprocessing] Done -- train {train.shape}, valid {valid.shape}, test {test.shape}")
+    return train, valid, test, income_cap

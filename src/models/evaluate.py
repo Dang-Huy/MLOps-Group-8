@@ -62,7 +62,7 @@ def evaluate(y_true, y_pred, y_prob: np.ndarray, split: str = "valid") -> dict:
         "class_labels":     ["Poor", "Standard", "Good"],
     }
 
-    print(f"\n[evaluate] ── {split.upper()} ──")
+    print(f"\n[evaluate] -- {split.upper()} --")
     print(f"  accuracy   : {report['accuracy']}")
     print(f"  f1 (macro) : {report['f1_macro']}")
     print(f"  auc (ovr)  : {report['auc_ovr']}")
@@ -78,5 +78,5 @@ def save_report(report: dict, filename: str | None = None) -> Path:
     path = REPORT_DIR / filename
     with open(path, "w") as f:
         json.dump(report, f, indent=2)
-    print(f"[evaluate] Report saved → {path}")
+    print(f"[evaluate] Report saved -> {path}")
     return path

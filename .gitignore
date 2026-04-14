@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ML artifacts (large files)
+artifacts/models/*.pkl
+artifacts/models/*.joblib
+artifacts/models/*.h5
+!artifacts/models/.gitkeep
+
+# Data (raw)
+data/raw/*.csv
+data/raw/*.parquet
+!data/raw/.gitkeep
+data/interim/
+data/processed/
+!data/processed/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets
+*.pem
+*.key
+.env.*
+!.env.example
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# MLflow
+mlruns/
+mlartifacts/

@@ -1,0 +1,21 @@
+evaluation:
+  metrics:
+    - accuracy
+    - f1_macro
+    - f1_weighted
+    - precision_macro
+    - recall_macro
+    - roc_auc_ovr
+  primary_metric: f1_macro
+  threshold_checks:
+    f1_macro_min: 0.70
+    accuracy_min: 0.75
+
+  calibration:
+    method: isotonic
+    cv: 5
+
+  explainability:
+    method: shap
+    max_display: 20
+    background_samples: 100

@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore")
 
 
 # ---------------------------------------------------------------------------
-# Ordinal mappings (fixed domain knowledge — not learned from data)
+# Ordinal mappings (fixed domain knowledge -- not learned from data)
 # ---------------------------------------------------------------------------
 
 CREDIT_MIX_MAP: Dict[str, int] = {"Bad": 0, "Standard": 1, "Good": 2}
@@ -52,7 +52,7 @@ class OrdinalEncoder:
         {category_string: integer_ordinal}
     handle_unknown : int or None
         Value assigned to unseen categories at transform time.
-        None → NaN (float column).
+        None -> NaN (float column).
     """
 
     def __init__(self, mapping: Dict[str, int], handle_unknown: Optional[int] = None):
@@ -60,7 +60,7 @@ class OrdinalEncoder:
         self.handle_unknown = handle_unknown
         self._is_fitted = False
 
-    # fit is a no-op — mapping is fixed by domain knowledge
+    # fit is a no-op -- mapping is fixed by domain knowledge
     def fit(self, series: pd.Series) -> "OrdinalEncoder":
         self._is_fitted = True
         return self
@@ -112,7 +112,7 @@ class OneHotEncoder:
             raise RuntimeError("Call fit() before transform().")
         dummies = pd.get_dummies(series, prefix=self.column_name_, drop_first=False)
         expected_cols = [f"{self.column_name_}_{cat}" for cat in self.categories_]
-        # Add missing columns (unseen categories at serving time → all zeros)
+        # Add missing columns (unseen categories at serving time -> all zeros)
         for col in expected_cols:
             if col not in dummies.columns:
                 dummies[col] = 0
@@ -159,13 +159,13 @@ class CategoricalEncoderPipeline:
 
         Parameters
         ----------
-        df : pd.DataFrame  — training split (before encoding).
+        df : pd.DataFrame  -- training split (before encoding).
 
         Returns
         -------
         self
         """
-        # Ordinal encoders (fixed mappings — fit is a no-op but kept for API symmetry)
+        # Ordinal encoders (fixed mappings -- fit is a no-op but kept for API symmetry)
         self.ordinal_encoders["Credit_Mix"] = OrdinalEncoder(CREDIT_MIX_MAP).fit(
             df.get("Credit_Mix", pd.Series(dtype=str))
         )
@@ -173,7 +173,7 @@ class CategoricalEncoderPipeline:
             df.get("Payment_of_Min_Amount", pd.Series(dtype=str))
         )
 
-        # One-hot encoders — learn categories from train
+        # One-hot encoders -- learn categories from train
         for col in OHE_COLUMNS:
             if col in df.columns:
                 enc = OneHotEncoder(drop_first=False)

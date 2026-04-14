@@ -1,0 +1,14 @@
+monitoring:
+  reference_data: data/reference/train_reference.parquet
+  drift:
+    psi_threshold: 0.20
+    features_to_monitor: all
+    window_days: 30
+  performance:
+    f1_macro_alert_threshold: 0.65
+    accuracy_alert_threshold: 0.70
+  latency:
+    p95_threshold_ms: 500
+    mean_threshold_ms: 200
+  output_dir: artifacts/drift_reports
+  powerbi_output_dir: artifacts/reports

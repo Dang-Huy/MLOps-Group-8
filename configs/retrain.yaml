@@ -1,0 +1,10 @@
+retraining:
+  triggers:
+    drift_psi_threshold: 0.25
+    performance_drop_threshold: 0.05
+    schedule_days: 30
+  data:
+    min_new_rows: 5000
+    lookback_days: 90
+  pipeline: src/pipelines/retraining_pipeline.py
+  notification_email: mlops-team@company.com

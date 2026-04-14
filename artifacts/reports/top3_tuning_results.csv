@@ -1,0 +1,4 @@
+model_name,f1_macro,f1_weighted,accuracy,precision_macro,recall_macro,auc_ovr,best_params
+xgboost,0.7301,0.7483,0.7486,0.7328,0.7285,0.8806,"{'n_estimators': 175, 'max_depth': 6, 'learning_rate': 0.08960785365368121}"
+random_forest,0.7453,0.7593,0.7565,0.731,0.7746,0.8985,"{'n_estimators': 104, 'max_depth': 20, 'min_samples_split': 8}"
+lightgbm,0.7862,0.7936,0.793,0.7741,0.8027,0.9142,"{'n_estimators': 490, 'max_depth': 8, 'learning_rate': 0.1974972566020227, 'num_leaves': 46, 'subsample': 0.8722689024299372, 'colsample_bytree': 0.6016900496982359}"

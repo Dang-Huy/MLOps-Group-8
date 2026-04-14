@@ -5,7 +5,7 @@ Validate a raw DataFrame against the schema contract before preprocessing.
 
 Input  : raw DataFrame from ingestion.py + schema from schema.py
 Output : validation report dict; raises ValueError on critical failures
-Role   : Quality gate — stops bad data entering the pipeline early
+Role   : Quality gate -- stops bad data entering the pipeline early
 """
 
 import pandas as pd
@@ -27,7 +27,7 @@ def validate_raw(df: pd.DataFrame, split: str = "train") -> dict:
     Parameters
     ----------
     df    : Raw DataFrame from ingestion.py
-    split : "train" | "valid" | "test" — affects whether target is expected
+    split : "train" | "valid" | "test" -- affects whether target is expected
 
     Returns
     -------
@@ -106,12 +106,12 @@ def validate_raw(df: pd.DataFrame, split: str = "train") -> dict:
     }
 
     # ---- Print summary ---------------------------------------------------
-    status = "✅ PASSED" if passed else "❌ FAILED"
-    print(f"[validation] {split} — {status}")
+    status = "PASSED" if passed else "FAILED"
+    print(f"[validation] {split} -- {status}")
     for w in warnings:
-        print(f"  ⚠️  {w}")
+        print(f"  [WARN] {w}")
     for e in errors:
-        print(f"  ❌ {e}")
+        print(f"  [ERR ] {e}")
 
     if not passed:
         raise ValueError(

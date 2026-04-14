@@ -4,7 +4,7 @@ src/data/ingestion.py
 Load raw data from disk into DataFrames.
 
 Input  : CSV file paths (from configs/data.yaml or direct args)
-Output : pandas DataFrames — train_raw, test_raw
+Output : pandas DataFrames -- train_raw, test_raw
 Role   : First step in the pipeline; touches nothing, only reads.
 """
 
@@ -33,7 +33,7 @@ def load_raw(
 
     Returns
     -------
-    (train_raw, test_raw) — unmodified DataFrames straight from disk
+    (train_raw, test_raw) -- unmodified DataFrames straight from disk
     """
     train_path = Path(train_path) if train_path else RAW_DIR / "train_raw.csv"
     test_path  = Path(test_path)  if test_path  else RAW_DIR / "test_raw.csv"
@@ -41,6 +41,6 @@ def load_raw(
     train = pd.read_csv(train_path, low_memory=False)
     test  = pd.read_csv(test_path,  low_memory=False)
 
-    print(f"[ingestion] train_raw : {train.shape}  ← {train_path}")
-    print(f"[ingestion] test_raw  : {test.shape}  ← {test_path}")
+    print(f"[ingestion] train_raw : {train.shape}  <- {train_path}")
+    print(f"[ingestion] test_raw  : {test.shape}  <- {test_path}")
     return train, test

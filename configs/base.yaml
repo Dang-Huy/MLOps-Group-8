@@ -1,0 +1,20 @@
+# Global configuration
+project:
+  name: credit-score-mlops
+  version: "1.0.0"
+  seed: 42
+
+paths:
+  data_raw: data/raw
+  data_interim: data/interim
+  data_processed: data/processed
+  data_reference: data/reference
+  artifacts_models: artifacts/models
+  artifacts_reports: artifacts/reports
+  artifacts_predictions: artifacts/predictions
+  artifacts_drift: artifacts/drift_reports
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+  file: logs/pipeline.log

@@ -1,0 +1,30 @@
+features:
+  derived:
+    - debt_to_income
+    - loan_to_income
+    - emi_to_income
+    - savings_rate
+    - balance_to_income
+    - credit_card_util_proxy
+    - delay_per_loan
+    - delinquency_rate
+    - inquiry_per_account
+    - credit_age_years
+
+  imputation:
+    numeric_strategy: median
+    categorical_strategy: mode
+
+  encoding:
+    ordinal:
+      Credit_Mix: {Bad: 0, Standard: 1, Good: 2}
+      Payment_of_Min_Amount: {No: 0, Yes: 1}
+    onehot:
+      - Occupation
+      - Payment_Behaviour
+    drop_before_encode:
+      - Type_of_Loan
+
+  selection:
+    method: variance_threshold
+    threshold: 0.01

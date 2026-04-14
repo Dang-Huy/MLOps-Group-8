@@ -1,0 +1,20 @@
+[project]
+name = "credit-score-mlops"
+version = "1.0.0"
+description = "End-to-end MLOps pipeline for credit score classification"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+
+[tool.ruff.format]
+quote-style = "double"

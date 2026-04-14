@@ -16,30 +16,30 @@ RAW_SCHEMA: dict[str, str] = {
     "Customer_ID":              "object",
     "Month":                    "object",
     "Name":                     "object",
-    "Age":                      "object",   # dirty — contains trailing chars
+    "Age":                      "object",   # dirty -- contains trailing chars
     "SSN":                      "object",
     "Occupation":               "object",
-    "Annual_Income":            "object",   # dirty — trailing underscores
+    "Annual_Income":            "object",   # dirty -- trailing underscores
     "Monthly_Inhand_Salary":    "float64",
     "Num_Bank_Accounts":        "int64",
     "Num_Credit_Card":          "int64",
     "Interest_Rate":            "int64",
-    "Num_of_Loan":              "object",   # dirty — trailing chars
+    "Num_of_Loan":              "object",   # dirty -- trailing chars
     "Type_of_Loan":             "object",
     "Delay_from_due_date":      "int64",
-    "Num_of_Delayed_Payment":   "object",   # dirty — trailing chars
-    "Changed_Credit_Limit":     "object",   # dirty — placeholder '_'
+    "Num_of_Delayed_Payment":   "object",   # dirty -- trailing chars
+    "Changed_Credit_Limit":     "object",   # dirty -- placeholder '_'
     "Num_Credit_Inquiries":     "float64",
     "Credit_Mix":               "object",
-    "Outstanding_Debt":         "object",   # dirty — trailing underscores
+    "Outstanding_Debt":         "object",   # dirty -- trailing underscores
     "Credit_Utilization_Ratio": "float64",
     "Credit_History_Age":       "object",   # string like "22 Years and 9 Months"
     "Payment_of_Min_Amount":    "object",
     "Total_EMI_per_month":      "float64",
-    "Amount_invested_monthly":  "object",   # dirty — garbage placeholder
+    "Amount_invested_monthly":  "object",   # dirty -- garbage placeholder
     "Payment_Behaviour":        "object",
-    "Monthly_Balance":          "object",   # dirty — garbage placeholder
-    "Credit_Score":             "object",   # target — absent in test set
+    "Monthly_Balance":          "object",   # dirty -- garbage placeholder
+    "Credit_Score":             "object",   # target -- absent in test set
 }
 
 # ---------------------------------------------------------------------------
@@ -87,5 +87,5 @@ TARGET_COL: str = "Credit_Score"
 TARGET_CLASSES: list[str] = ["Poor", "Standard", "Good"]
 TARGET_ENCODING: dict[str, int] = {"Poor": 0, "Standard": 1, "Good": 2}
 
-# Columns to drop (in addition to PII) — multi-label free text, too sparse
+# Columns to drop (in addition to PII) -- multi-label free text, too sparse
 DROP_BEFORE_MODEL: list[str] = ["Type_of_Loan"]

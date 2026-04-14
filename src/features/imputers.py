@@ -10,10 +10,10 @@ Design rules
 ------------
 * Imputation statistics are **computed from the training set only**.
 * The fitted imputer must be serialised and reloaded at serving time.
-* Strategy mirrors the notebook (data_preparation.ipynb §7):
-    - Numeric columns  → median (robust to outliers)
-    - Categorical cols → mode
-* `Type_of_Loan` is intentionally excluded — it is dropped by the encoder.
+* Strategy mirrors the notebook (data_preparation.ipynb Sec 7):
+    - Numeric columns  -> median (robust to outliers)
+    - Categorical cols -> mode
+* `Type_of_Loan` is intentionally excluded -- it is dropped by the encoder.
 """
 
 from __future__ import annotations
@@ -150,7 +150,7 @@ class ModeImputer:
 
 class ImputerPipeline:
     """
-    Sequential pipeline: MedianImputer → ModeImputer.
+    Sequential pipeline: MedianImputer -> ModeImputer.
 
     Fitted state
     ------------
@@ -193,9 +193,9 @@ class ImputerPipeline:
         remaining = df.isnull().sum()
         remaining = remaining[remaining > 0]
         if remaining.empty:
-            print("[ImputerPipeline] ✅ No missing values remaining.")
+            print("[ImputerPipeline] OK - No missing values remaining.")
         else:
-            print("[ImputerPipeline] ⚠️  Remaining NaN after imputation:")
+            print("[ImputerPipeline] WARN - Remaining NaN after imputation:")
             print(remaining.to_string())
 
     @property

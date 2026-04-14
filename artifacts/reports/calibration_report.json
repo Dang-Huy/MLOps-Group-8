@@ -1,0 +1,12 @@
+{
+  "n_samples": 15001,
+  "n_bins": 10,
+  "ece_before_Poor": 0.0267,
+  "ece_after_Poor": 0.1247,
+  "ece_before_Standard": 0.0514,
+  "ece_after_Standard": 0.1812,
+  "ece_before_Good": 0.0305,
+  "ece_after_Good": 0.0869,
+  "ece_before_mean": 0.0362,
+  "ece_after_mean": 0.1309
+}

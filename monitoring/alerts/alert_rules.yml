@@ -1,0 +1,19 @@
+groups:
+- name: credit-score-alerts
+  rules:
+  - alert: ModelDriftDetected
+    expr: psi_max > 0.20
+    for: 5m
+    labels:
+      severity: high
+    annotations:
+      summary: "Feature drift detected"
+      description: "PSI max exceeded 0.20 threshold"
+
+  - alert: HighLatency
+    expr: http_request_duration_p95 > 500
+    for: 2m
+    labels:
+      severity: medium
+    annotations:
+      summary: "API latency too high"
