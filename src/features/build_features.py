@@ -6,7 +6,7 @@ Build derived features from the preprocessed DataFrame.
 Input  : Preprocessed DataFrame (output of src/data/preprocessing.py)
 Output : DataFrame with additional engineered feature columns appended.
 
-All transformations are deterministic and stateless — no fitting required.
+All transformations are deterministic and stateless -- no fitting required.
 The same function must be called identically at training time and serving time
 to avoid training-serving skew.
 """
@@ -65,7 +65,7 @@ def _delinquency_rate(df: pd.DataFrame) -> pd.Series:
 
 
 def _inquiry_per_account(df: pd.DataFrame) -> pd.Series:
-    """Credit inquiries per bank account — signals credit-seeking behaviour."""
+    """Credit inquiries per bank account -- signals credit-seeking behaviour."""
     return df["Num_Credit_Inquiries"] / df["Num_Bank_Accounts"].replace(0, np.nan)
 
 
@@ -99,7 +99,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     Parameters
     ----------
     df : pd.DataFrame
-        Preprocessed DataFrame — output of src/data/preprocessing.py.
+        Preprocessed DataFrame -- output of src/data/preprocessing.py.
         Expected columns include: Annual_Income, Outstanding_Debt,
         Monthly_Inhand_Salary, Num_of_Loan, Total_EMI_per_month,
         Amount_invested_monthly, Monthly_Balance, Num_Credit_Card,
@@ -116,7 +116,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     for feature_name, feature_fn in DERIVED_FEATURES.items():
         values = feature_fn(df)
-        # Replace ±inf (from divide-by-zero when denominator is non-NaN zero)
+        # Replace +/-inf (from divide-by-zero when denominator is non-NaN zero)
         df[feature_name] = values.replace([np.inf, -np.inf], np.nan)
 
     print(f"[build_features] Added {len(DERIVED_FEATURES)} derived features.")
