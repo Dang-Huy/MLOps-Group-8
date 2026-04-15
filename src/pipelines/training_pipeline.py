@@ -251,11 +251,47 @@ def _tune_model(
     y_valid: np.ndarray,
     n_trials: int = 20,
     timeout:  int = 180,
+    fixed_params: dict | None = None,
 ) -> tuple[object, dict, dict]:
     """
     Light Optuna tuning for the given model name.
+    If fixed_params is provided, skip the Optuna search and train once
+    with those params (used when hyperparameter_tuning_pipeline.py has
+    already computed the best params).
     Returns (best_model, best_params, best_metrics).
     """
+    # Fast path: pre-computed params from HPO pipeline
+    if fixed_params is not None:
+        from sklearn.metrics import f1_score, accuracy_score, precision_score
+        from sklearn.metrics import recall_score, roc_auc_score
+        from sklearn.utils.class_weight import compute_sample_weight
+        from src.pipelines.hyperparameter_tuning_pipeline import _build_model
+
+        m = _build_model(name, fixed_params)
+        fit_kwargs: dict = {}
+        if "xgboost" in type(m).__module__:
+            sw = compute_sample_weight("balanced", y_train)
+            fit_kwargs = {"sample_weight": sw,
+                          "eval_set": [(X_valid.values, y_valid)], "verbose": False}
+        elif "lightgbm" in type(m).__module__:
+            sw = compute_sample_weight("balanced", y_train)
+            fit_kwargs = {"sample_weight": sw,
+                          "eval_set": [(X_valid, y_valid)], "callbacks": []}
+        m.fit(X_train, y_train, **fit_kwargs)
+        y_prob = m.predict_proba(X_valid)
+        y_pred = np.argmax(y_prob, axis=1)
+        metrics = {
+            "model_name":      name,
+            "f1_macro":        round(f1_score(y_valid, y_pred, average="macro",    zero_division=0), 4),
+            "f1_weighted":     round(f1_score(y_valid, y_pred, average="weighted", zero_division=0), 4),
+            "accuracy":        round(accuracy_score(y_valid, y_pred), 4),
+            "precision_macro": round(precision_score(y_valid, y_pred, average="macro", zero_division=0), 4),
+            "recall_macro":    round(recall_score(y_valid, y_pred, average="macro",    zero_division=0), 4),
+            "auc_ovr":         round(roc_auc_score(y_valid, y_prob, multi_class="ovr", average="macro"), 4),
+            "best_params":     fixed_params,
+        }
+        logger.info(f"  Trained {name} with HPO params: f1_macro={metrics['f1_macro']:.4f}")
+        return m, fixed_params, metrics
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -583,20 +619,42 @@ def run_training_pipeline() -> ModelBundle:
     write_csv(raw_df, REPORT_DIR / "raw_model_comparison.csv")
 
     # ── 11. TUNE TOP-3 ────────────────────────────────────────────────────────
+    # If hyperparameter_tuning_pipeline.py has been run, load those params
+    # instead of running a short in-line Optuna study.
     logger.info("\n== 11. TUNE TOP-3 =====================================")
+    _hpo_params_path = REPORT_DIR / "best_hyperparameters.json"
+    _precomputed: dict = {}
+    if _hpo_params_path.exists():
+        import json as _json
+        with open(_hpo_params_path) as _f:
+            _precomputed = _json.load(_f)
+        _loaded = [n for n in top3_names if n in _precomputed]
+        if _loaded:
+            logger.info(f"  Loaded pre-computed HPO params for: {_loaded}")
+
     tuned_models:   dict[str, object] = {}
     tuning_results: list[dict]        = []
     best_params_all: dict             = {}
 
     for name in top3_names:
-        logger.info(f"  Tuning: {name}")
-        model, params, metrics = _tune_model(
-            name, X_train, y_train, X_valid, y_valid,
-            n_trials=20, timeout=120,
-        )
-        tuned_models[name]     = model
+        if name in _precomputed:
+            # Train with pre-computed hyperparameters (skip Optuna)
+            logger.info(f"  Using HPO params for {name}: {_precomputed[name]}")
+            model, params, metrics = _tune_model(
+                name, X_train, y_train, X_valid, y_valid,
+                fixed_params=_precomputed[name],   # train once, skip search
+                n_trials=1, timeout=600,
+            )
+        else:
+            # Light inline Optuna search (fallback when HPO pipeline not run)
+            logger.info(f"  Tuning: {name}")
+            model, params, metrics = _tune_model(
+                name, X_train, y_train, X_valid, y_valid,
+                n_trials=20, timeout=120,
+            )
+        tuned_models[name]    = model
         tuning_results.append(metrics)
-        best_params_all[name]  = params
+        best_params_all[name] = params
 
     tuning_df = pd.DataFrame(tuning_results)
     write_csv(tuning_df, REPORT_DIR / "top3_tuning_results.csv")
