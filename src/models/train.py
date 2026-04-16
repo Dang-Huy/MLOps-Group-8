@@ -94,7 +94,7 @@ def train(
         "class_weighting":   "balanced",
     }
 
-    print(f"[train] Fitted in {elapsed}s — {n_used} trees, {X_train.shape[1]} features")
+    print(f"[train] Fitted in {elapsed}s -- {n_used} trees, {X_train.shape[1]} features")
     return model, metadata
 
 
@@ -103,4 +103,4 @@ def save_metadata(metadata: dict, path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(metadata, f, indent=2)
-    print(f"[train] Metadata saved → {path}")
+    print(f"[train] Metadata saved -> {path}")
