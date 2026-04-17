@@ -12,9 +12,9 @@ Design rules
 * The fitted selector is serialised (via src/models/serialize.py) and applied
   identically at serving time to guarantee column alignment.
 * Three selection strategies are provided:
-    1. ExplicitSelector  — hand-picked list from domain knowledge / notebook EDA.
-    2. VarianceSelector  — drops near-zero-variance columns (statistical).
-    3. FeatureSelector   — composable pipeline wrapping both.
+    1. ExplicitSelector  -- hand-picked list from domain knowledge / notebook EDA.
+    2. VarianceSelector  -- drops near-zero-variance columns (statistical).
+    3. FeatureSelector   -- composable pipeline wrapping both.
 * The default selection (SELECTED_FEATURES) mirrors the stable feature set
   observed in the data_preparation notebook after encoding.
 """
@@ -124,7 +124,7 @@ class ExplicitSelector:
         present = [f for f in self.features if f in df.columns]
         missing = [f for f in self.features if f not in df.columns]
         if missing:
-            print(f"[ExplicitSelector] ⚠️  {len(missing)} requested features not found "
+            print(f"[ExplicitSelector] [WARN]  {len(missing)} requested features not found "
                   f"in DataFrame and will be skipped: {missing}")
         self.selected_features_ = present
         print(f"[ExplicitSelector] Selected {len(present)} features.")
@@ -213,8 +213,8 @@ class FeatureSelector:
     Composable selector pipeline.
 
     Steps (applied in order at transform time):
-    1. ExplicitSelector — keep hand-picked columns.
-    2. VarianceSelector — additionally drop near-constant columns.
+    1. ExplicitSelector -- keep hand-picked columns.
+    2. VarianceSelector -- additionally drop near-constant columns.
 
     Parameters
     ----------

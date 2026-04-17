@@ -5,7 +5,7 @@ Validate a raw DataFrame against the schema contract before preprocessing.
 
 Input  : raw DataFrame from ingestion.py + schema from schema.py
 Output : validation report dict; raises ValueError on critical failures
-Role   : Quality gate — stops bad data entering the pipeline early
+Role   : Quality gate — stop bad data entering the pipeline early
 """
 
 import pandas as pd

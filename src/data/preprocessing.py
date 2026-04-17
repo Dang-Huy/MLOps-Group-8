@@ -5,7 +5,7 @@ Clean and type-cast the raw DataFrame before feature engineering.
 
 Input  : raw DataFrame (post-validation) + optional outlier caps from train
 Output : cleaned DataFrame + fitted caps dict (for valid/test consistency)
-Role   : Wraps all cleaning logic proven in data_preparation.ipynb into
+Role   : Wrap all cleaning logic proven in data_preparation.ipynb into
          reusable, cap-consistent functions.
 
 Call order
