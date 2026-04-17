@@ -1,0 +1,5 @@
+rank,model_name,f1_macro,f1_weighted,accuracy,precision_macro,recall_macro,auc_ovr,best_params
+1,lightgbm,0.7862,0.7936,0.793,0.7741,0.8027,0.9142,"{'n_estimators': 490, 'max_depth': 8, 'learning_rate': 0.1974972566020227, 'num_leaves': 46, 'subsample': 0.8722689024299372, 'colsample_bytree': 0.6016900496982359}"
+2,ensemble_soft_voting,0.7839,0.7927,0.7917,0.7701,0.8044,0.9146,
+3,xgboost,0.7824,0.7909,0.7899,0.7685,0.8031,0.9119,"{'n_estimators': 292, 'max_depth': 7, 'learning_rate': 0.19823515856674875, 'subsample': 0.9088259943960009, 'colsample_bytree': 0.8680403705847435}"
+4,random_forest,0.7443,0.7589,0.7559,0.7302,0.7738,0.8992,"{'n_estimators': 212, 'max_depth': 20, 'min_samples_split': 8}"

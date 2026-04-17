@@ -1,0 +1,8 @@
+timestamp,model_version,split,metric,value
+2026-04-17T09:44:32.086021,1.0.0,validation,rank,1.0
+2026-04-17T09:44:32.086021,1.0.0,validation,f1_macro,0.7862
+2026-04-17T09:44:32.086021,1.0.0,validation,f1_weighted,0.7936
+2026-04-17T09:44:32.086021,1.0.0,validation,accuracy,0.793
+2026-04-17T09:44:32.086021,1.0.0,validation,precision_macro,0.7741
+2026-04-17T09:44:32.086021,1.0.0,validation,recall_macro,0.8027
+2026-04-17T09:44:32.086021,1.0.0,validation,auc_ovr,0.9142

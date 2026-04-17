@@ -1,0 +1,43 @@
+{
+  "split": "test",
+  "n_samples": 15000,
+  "accuracy": 0.7875,
+  "f1_macro": 0.7809,
+  "f1_weighted": 0.7882,
+  "precision_macro": 0.7672,
+  "recall_macro": 0.8011,
+  "auc_ovr": 0.9113,
+  "auc_ovo": 0.9201,
+  "ks_per_class": {
+    "Poor": 0.7542,
+    "Standard": 0.599,
+    "Good": 0.7636
+  },
+  "f1_per_class": {
+    "Poor": 0.7971,
+    "Standard": 0.7966,
+    "Good": 0.749
+  },
+  "confusion_matrix": [
+    [
+      3652,
+      586,
+      112
+    ],
+    [
+      1144,
+      5987,
+      845
+    ],
+    [
+      17,
+      483,
+      2174
+    ]
+  ],
+  "class_labels": [
+    "Poor",
+    "Standard",
+    "Good"
+  ]
+}
