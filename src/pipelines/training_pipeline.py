@@ -105,11 +105,32 @@ def _env_bool(name: str, default: bool = True) -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
+def _normalize_mlflow_tracking_uri(uri: str) -> str:
+    raw = (uri or "").strip()
+    if not raw:
+        return raw
+
+    # Keep non-filesystem tracking backends unchanged.
+    if raw in {"databricks", "databricks-uc", "uc"}:
+        return raw
+    if "://" in raw:
+        return raw
+
+    # Normalize local paths (relative/absolute, including Windows paths) to file URI.
+    try:
+        return Path(raw).expanduser().resolve().as_uri()
+    except Exception:
+        return raw
+
+
 def _get_mlflow_config() -> dict[str, Any]:
-    default_tracking_uri = str((ROOT / "mlruns").resolve())
+    default_tracking_uri = (ROOT / "mlruns").resolve().as_uri()
+    tracking_uri = _normalize_mlflow_tracking_uri(
+        os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri)
+    )
     return {
         "enabled": _env_bool("MLFLOW_ENABLED", default=True),
-        "tracking_uri": os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri),
+        "tracking_uri": tracking_uri,
         "experiment_name": os.getenv("MLFLOW_EXPERIMENT_NAME", "CreditScoringTraining"),
         "run_name": os.getenv("MLFLOW_RUN_NAME", ""),
     }

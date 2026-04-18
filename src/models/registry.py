@@ -31,6 +31,24 @@ def _mlflow_enabled() -> bool:
     return _env_bool("MLFLOW_ENABLED", default=True)
 
 
+def _normalize_mlflow_tracking_uri(uri: str) -> str:
+    raw = (uri or "").strip()
+    if not raw:
+        return raw
+
+    # Keep non-filesystem tracking backends unchanged.
+    if raw in {"databricks", "databricks-uc", "uc"}:
+        return raw
+    if "://" in raw:
+        return raw
+
+    # Normalize local paths (relative/absolute, including Windows paths) to file URI.
+    try:
+        return Path(raw).expanduser().resolve().as_uri()
+    except Exception:
+        return raw
+
+
 def _get_mlflow_client():
     if not _mlflow_enabled():
         return None
@@ -38,8 +56,10 @@ def _get_mlflow_client():
         import mlflow  # type: ignore
         from mlflow.tracking import MlflowClient  # type: ignore
 
-        default_tracking_uri = str((REPO_ROOT / "mlruns").resolve())
-        tracking_uri = os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri)
+        default_tracking_uri = (REPO_ROOT / "mlruns").resolve().as_uri()
+        tracking_uri = _normalize_mlflow_tracking_uri(
+            os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri)
+        )
         mlflow.set_tracking_uri(tracking_uri)
         return MlflowClient()
     except Exception as e:
