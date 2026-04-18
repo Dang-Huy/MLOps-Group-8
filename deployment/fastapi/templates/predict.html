@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Predict — Credit Score MLOps{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Credit Score Prediction</h1>
+<p class="page-subtitle">Fill in the customer details and submit to get a classification.</p>
+
+<div class="predict-layout">
+  <!-- Form -->
+  <div class="card form-card">
+    <div class="card-header">Customer Details</div>
+    <form id="predict-form" onsubmit="runPrediction(event)">
+
+      <fieldset>
+        <legend>Demographics &amp; Income</legend>
+        <div class="field-row">
+          <label>Age<input type="number" name="Age" min="18" max="100" placeholder="34" /></label>
+          <label>Annual Income<input type="number" name="Annual_Income" min="0" step="100" placeholder="78000" /></label>
+          <label>Monthly Salary<input type="number" name="Monthly_Inhand_Salary" min="0" step="50" placeholder="5200" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Accounts &amp; Credit Cards</legend>
+        <div class="field-row">
+          <label>Bank Accounts<input type="number" name="Num_Bank_Accounts" min="0" placeholder="4" /></label>
+          <label>Credit Cards<input type="number" name="Num_Credit_Card" min="0" placeholder="3" /></label>
+          <label>Interest Rate (%)<input type="number" name="Interest_Rate" min="0" max="100" placeholder="12" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Loans &amp; Payments</legend>
+        <div class="field-row">
+          <label>Num of Loans<input type="number" name="Num_of_Loan" min="0" placeholder="2" /></label>
+          <label>Delay from Due Date<input type="number" name="Delay_from_due_date" min="0" placeholder="3" /></label>
+          <label>Num Delayed Payments<input type="number" name="Num_of_Delayed_Payment" min="0" placeholder="1" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Debt &amp; Utilisation</legend>
+        <div class="field-row">
+          <label>Changed Credit Limit<input type="number" name="Changed_Credit_Limit" step="0.1" placeholder="8.5" /></label>
+          <label>Credit Inquiries<input type="number" name="Num_Credit_Inquiries" min="0" placeholder="2" /></label>
+          <label>Outstanding Debt<input type="number" name="Outstanding_Debt" min="0" step="10" placeholder="1200" /></label>
+        </div>
+        <div class="field-row">
+          <label>Utilisation Ratio (%)<input type="number" name="Credit_Utilization_Ratio" min="0" max="100" step="0.1" placeholder="24.3" /></label>
+          <label>Credit History Age (mo)<input type="number" name="Credit_History_Age" min="0" placeholder="86" /></label>
+          <label>Total EMI / Month<input type="number" name="Total_EMI_per_month" min="0" step="10" placeholder="350" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Savings &amp; Behaviour</legend>
+        <div class="field-row">
+          <label>Invested Monthly<input type="number" name="Amount_invested_monthly" min="0" step="10" placeholder="500" /></label>
+          <label>Monthly Balance<input type="number" name="Monthly_Balance" min="0" step="50" placeholder="1800" /></label>
+        </div>
+        <div class="field-row">
+          <label>Occupation
+            <select name="Occupation">
+              <option value="">— select —</option>
+              <option>Scientist</option><option>Teacher</option><option>Engineer</option>
+              <option>Entrepreneur</option><option>Developer</option><option>Lawyer</option>
+              <option>Media_Manager</option><option>Doctor</option><option>Journalist</option>
+              <option>Manager</option><option>Accountant</option><option>Musician</option>
+              <option>Mechanic</option><option>Writer</option><option>Architect</option>
+            </select>
+          </label>
+          <label>Credit Mix
+            <select name="Credit_Mix">
+              <option value="">— select —</option>
+              <option>Good</option><option>Standard</option><option>Bad</option>
+            </select>
+          </label>
+          <label>Paid Min Amount?
+            <select name="Payment_of_Min_Amount">
+              <option value="">— select —</option>
+              <option>Yes</option><option>No</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Payment Behaviour
+            <select name="Payment_Behaviour">
+              <option value="">— select —</option>
+              <option>High_spent_Small_value_payments</option>
+              <option>Low_spent_Small_value_payments</option>
+              <option>High_spent_Medium_value_payments</option>
+              <option>Low_spent_Medium_value_payments</option>
+              <option>High_spent_Large_value_payments</option>
+              <option>Low_spent_Large_value_payments</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submit-btn">Predict</button>
+        <button type="reset" class="btn btn-ghost" onclick="clearResult()">Clear</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Result panel -->
+  <div class="card result-card" id="result-panel" style="display:none">
+    <div class="card-header">Result</div>
+    <div id="result-content"></div>
+  </div>
+</div>
+
+<script>
+async function runPrediction(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Predicting…';
+
+  const form = document.getElementById('predict-form');
+  const data = {};
+  new FormData(form).forEach((v, k) => {
+    if (v !== '') data[k] = isNaN(v) || ['Occupation','Credit_Mix','Payment_of_Min_Amount','Payment_Behaviour'].includes(k) ? v : parseFloat(v);
+  });
+
+  try {
+    const resp = await fetch('/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      showError(err.detail || JSON.stringify(err));
+    } else {
+      showResult(await resp.json());
+    }
+  } catch (ex) {
+    showError(ex.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Predict';
+  }
+}
+
+function showResult(r) {
+  const cls = r.predicted_class;
+  const colorMap = {Poor: 'badge-red', Standard: 'badge-amber', Good: 'badge-green'};
+  const badgeCls = colorMap[cls] || 'badge-grey';
+
+  const probRows = Object.entries(r.probabilities)
+    .sort((a,b) => b[1]-a[1])
+    .map(([label, p]) => `
+      <div class="prob-row">
+        <span class="prob-label">${label}</span>
+        <div class="prob-bar-wrap"><div class="prob-bar ${colorMap[label]||''}" style="width:${(p*100).toFixed(1)}%"></div></div>
+        <span class="prob-value">${(p*100).toFixed(1)}%</span>
+      </div>`).join('');
+
+  document.getElementById('result-content').innerHTML = `
+    <div class="result-class"><span class="badge ${badgeCls}">${cls}</span></div>
+    <div class="kv-row"><span>Decision</span><strong>${r.decision}</strong></div>
+    <div class="kv-row"><span>Action</span><strong>${r.action}</strong></div>
+    <div class="kv-row"><span>Confidence</span><strong>${(r.confidence*100).toFixed(1)}%</strong></div>
+    <div class="kv-row"><span>Model</span><strong>${r.model_version}</strong></div>
+    <div class="prob-section"><div class="section-label">Class Probabilities</div>${probRows}</div>`;
+  document.getElementById('result-panel').style.display = '';
+}
+
+function showError(msg) {
+  document.getElementById('result-content').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+  document.getElementById('result-panel').style.display = '';
+}
+
+function clearResult() {
+  document.getElementById('result-panel').style.display = 'none';
+}
+</script>
+{% endblock %}

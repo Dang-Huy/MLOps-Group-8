@@ -2,13 +2,25 @@
 from __future__ import annotations
 
 import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from deployment.fastapi.config import load_config
+from deployment.fastapi.metrics import (
+    BATCH_SIZE,
+    MODEL_INFO,
+    MODEL_LOADED,
+    PREDICTION_LABELS,
+    REQUEST_COUNT,
+    REQUEST_LATENCY,
+)
 from deployment.fastapi.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
@@ -18,10 +30,36 @@ from deployment.fastapi.schemas import (
     PredictResponse,
 )
 from deployment.fastapi.service import InferenceBackendService
+from deployment.fastapi.web import router as web_router
 from src.monitoring.latency_monitor import record_latency
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+_FASTAPI_DIR = Path(__file__).resolve().parent
+_service: InferenceBackendService | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _service
+    try:
+        cfg = load_config()
+        _service = InferenceBackendService.get_instance(config=cfg)
+        MODEL_LOADED.set(1)
+        MODEL_INFO.info({
+            "model_name":    _service.resolved.model_name,
+            "model_version": _service.resolved.model_version,
+            "source":        _service.resolved.source_resolved_from,
+        })
+        logger.info("Deployment inference service started successfully.")
+    except Exception as exc:
+        _service = None
+        MODEL_LOADED.set(0)
+        logger.error("Failed to initialize deployment inference service: %s", exc)
+    yield
+    InferenceBackendService.reset()
+
 
 app = FastAPI(
     title="Credit Score Classification API (Deployment)",
@@ -29,6 +67,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -38,19 +77,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_service: InferenceBackendService | None = None
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    global _service
-    try:
-        cfg = load_config()
-        _service = InferenceBackendService.get_instance(config=cfg)
-        logger.info("Deployment inference service started successfully.")
-    except Exception as exc:
-        _service = None
-        logger.error("Failed to initialize deployment inference service: %s", exc)
+app.mount("/static", StaticFiles(directory=str(_FASTAPI_DIR / "static")), name="static")
+app.include_router(web_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -80,6 +108,18 @@ def _get_service() -> InferenceBackendService:
     return _service
 
 
+# ── Prometheus metrics endpoint ───────────────────────────────────────────────
+
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics():
+    return PlainTextResponse(
+        content=generate_latest().decode("utf-8"),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
+# ── Health ────────────────────────────────────────────────────────────────────
+
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 def health() -> HealthResponse:
     service = _get_service()
@@ -97,6 +137,8 @@ def model_info() -> ModelInfoResponse:
     return ModelInfoResponse(**service.get_model_info())
 
 
+# ── Inference ─────────────────────────────────────────────────────────────────
+
 @app.post("/predict", response_model=PredictResponse, tags=["Inference"])
 async def predict(request: PredictRequest) -> PredictResponse:
     service = _get_service()
@@ -104,13 +146,23 @@ async def predict(request: PredictRequest) -> PredictResponse:
     try:
         payload = request.model_dump()
         result = service.predict_one(payload)
-        record_latency((time.time() - start) * 1000)
+        elapsed_ms = (time.time() - start) * 1000
+
+        record_latency(elapsed_ms)
+        REQUEST_COUNT.labels(endpoint="/predict", status="ok").inc()
+        REQUEST_LATENCY.labels(endpoint="/predict").observe(elapsed_ms)
+        PREDICTION_LABELS.labels(predicted_class=result.get("predicted_class", "unknown")).inc()
+
         return PredictResponse(**result)
     except HTTPException:
         record_latency((time.time() - start) * 1000, is_error=True)
+        REQUEST_COUNT.labels(endpoint="/predict", status="error").inc()
         raise
     except Exception as exc:
-        record_latency((time.time() - start) * 1000, is_error=True)
+        elapsed_ms = (time.time() - start) * 1000
+        record_latency(elapsed_ms, is_error=True)
+        REQUEST_COUNT.labels(endpoint="/predict", status="error").inc()
+        REQUEST_LATENCY.labels(endpoint="/predict").observe(elapsed_ms)
         logger.error("Prediction error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -126,7 +178,15 @@ async def predict_batch(request: BatchPredictRequest) -> BatchPredictResponse:
 
         results = service.predict_batch(records)
         predictions = [PredictResponse(**row) for row in results]
-        record_latency((time.time() - start) * 1000)
+        elapsed_ms = (time.time() - start) * 1000
+
+        record_latency(elapsed_ms)
+        REQUEST_COUNT.labels(endpoint="/predict/batch", status="ok").inc()
+        REQUEST_LATENCY.labels(endpoint="/predict/batch").observe(elapsed_ms)
+        BATCH_SIZE.observe(len(records))
+        for pred in predictions:
+            PREDICTION_LABELS.labels(predicted_class=pred.predicted_class).inc()
+
         return BatchPredictResponse(
             predictions=predictions,
             n_records=len(predictions),
@@ -134,8 +194,12 @@ async def predict_batch(request: BatchPredictRequest) -> BatchPredictResponse:
         )
     except HTTPException:
         record_latency((time.time() - start) * 1000, is_error=True)
+        REQUEST_COUNT.labels(endpoint="/predict/batch", status="error").inc()
         raise
     except Exception as exc:
-        record_latency((time.time() - start) * 1000, is_error=True)
+        elapsed_ms = (time.time() - start) * 1000
+        record_latency(elapsed_ms, is_error=True)
+        REQUEST_COUNT.labels(endpoint="/predict/batch", status="error").inc()
+        REQUEST_LATENCY.labels(endpoint="/predict/batch").observe(elapsed_ms)
         logger.error("Batch prediction error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

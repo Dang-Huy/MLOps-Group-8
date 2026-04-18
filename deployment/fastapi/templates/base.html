@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Credit Score MLOps{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="/ui/">CreditScore ML</a>
+    <div class="nav-links">
+      <a href="/ui/" class="{% if active == 'home' %}active{% endif %}">Home</a>
+      <a href="/ui/predict" class="{% if active == 'predict' %}active{% endif %}">Predict</a>
+      <a href="/ui/monitor" class="{% if active == 'monitor' %}active{% endif %}">Monitor</a>
+      <a href="/health" target="_blank">Health</a>
+      <a href="/docs" target="_blank">API Docs</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <span>Credit Score Classification &mdash; MLOps Group 8</span>
+  </footer>
+</body>
+</html>

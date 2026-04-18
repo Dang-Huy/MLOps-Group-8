@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-score-api
+  namespace: credit-score
+  labels:
+    app: credit-score-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: credit-score-api
+  template:
+    metadata:
+      labels:
+        app: credit-score-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: api
+          image: credit-score-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-score-config
+                  key: mlflow_tracking_uri
+            - name: MLFLOW_MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-score-config
+                  key: mlflow_model_name
+            - name: MLFLOW_MODEL_ALIAS
+              value: "Production"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: artifacts
+              mountPath: /app/artifacts
+              readOnly: true
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: credit-score-artifacts-pvc

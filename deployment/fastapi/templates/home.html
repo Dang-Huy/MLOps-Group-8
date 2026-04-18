@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Home — Credit Score MLOps{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Credit Score Classification</h1>
+<p class="page-subtitle">LightGBM multiclass model &mdash; Poor / Standard / Good</p>
+
+<div class="card-grid">
+  <!-- Model info card -->
+  <div class="card">
+    <div class="card-header">Current Model</div>
+    {% if model_info %}
+      <div class="kv-row"><span>Name</span><strong>{{ model_info.model_name or "—" }}</strong></div>
+      <div class="kv-row"><span>Version</span><strong>{{ model_info.model_version or "—" }}</strong></div>
+      <div class="kv-row"><span>Source</span><strong>{{ model_info.source_resolved_from or "—" }}</strong></div>
+      {% if model_info.metrics_core %}
+        <div class="kv-row"><span>F1 (macro)</span><strong>{{ "%.4f"|format(model_info.metrics_core.get("final_test_f1_macro") or model_info.metrics_core.get("f1_macro") or 0) }}</strong></div>
+        <div class="kv-row"><span>Accuracy</span><strong>{{ "%.4f"|format(model_info.metrics_core.get("final_test_accuracy") or model_info.metrics_core.get("accuracy") or 0) }}</strong></div>
+        <div class="kv-row"><span>AUC (OVR)</span><strong>{{ "%.4f"|format(model_info.metrics_core.get("final_test_auc_ovr") or model_info.metrics_core.get("auc_ovr") or 0) }}</strong></div>
+      {% endif %}
+    {% else %}
+      <p class="muted">Model info unavailable — check <a href="/health">health</a>.</p>
+    {% endif %}
+  </div>
+
+  <!-- Quick links card -->
+  <div class="card">
+    <div class="card-header">Quick Links</div>
+    <div class="quick-links">
+      <a class="btn btn-primary" href="/ui/predict">Run a Prediction</a>
+      <a class="btn btn-secondary" href="/ui/monitor">View Dashboard</a>
+      <a class="btn btn-ghost" href="/docs" target="_blank">API Docs (Swagger)</a>
+      <a class="btn btn-ghost" href="/redoc" target="_blank">API Docs (ReDoc)</a>
+      <a class="btn btn-ghost" href="/health" target="_blank">Health Check</a>
+      <a class="btn btn-ghost" href="/model-info" target="_blank">Model Info (JSON)</a>
+    </div>
+  </div>
+</div>
+
+{% if model_info and model_info.warnings %}
+<div class="alert alert-warning">
+  <strong>Warnings</strong>
+  <ul>{% for w in model_info.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% endblock %}

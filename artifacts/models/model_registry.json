@@ -3,7 +3,7 @@
     {
       "model_name": "lightgbm",
       "version": "1.0.0",
-      "artifact_path": "D:\\code\\Python\\DSEB_ex\\MLOps-Group-8\\artifacts\\models\\final_model_bundle.pkl",
+      "artifact_path": "artifacts/models/final_model_bundle.pkl",
       "metrics": {
         "rank": 1,
         "model_name": "lightgbm",
