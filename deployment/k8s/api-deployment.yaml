@@ -38,7 +38,7 @@ spec:
                   name: credit-score-config
                   key: mlflow_model_name
             - name: MLFLOW_MODEL_ALIAS
-              value: "Production"
+              value: "production"
           resources:
             requests:
               cpu: "250m"

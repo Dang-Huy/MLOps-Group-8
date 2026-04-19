@@ -263,7 +263,7 @@ def _resolve_bundle_path_from_mlflow_source(source_path: Path, warnings: list[st
                 f"'{candidate_bundle}' for inference."
             )
             logger.info(msg)
-            warnings.append(msg)
+            # warnings.append(msg)
             return candidate_bundle
 
     raise ModelResolutionError(

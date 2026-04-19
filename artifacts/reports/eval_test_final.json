@@ -1,38 +1,38 @@
 {
   "split": "test",
   "n_samples": 15000,
-  "accuracy": 0.7932,
-  "f1_macro": 0.7843,
-  "f1_weighted": 0.7938,
-  "precision_macro": 0.7741,
-  "recall_macro": 0.7972,
-  "auc_ovr": 0.9136,
-  "auc_ovo": 0.9214,
+  "accuracy": 0.7875,
+  "f1_macro": 0.7809,
+  "f1_weighted": 0.7882,
+  "precision_macro": 0.7672,
+  "recall_macro": 0.8011,
+  "auc_ovr": 0.9113,
+  "auc_ovo": 0.9201,
   "ks_per_class": {
-    "Poor": 0.7555,
-    "Standard": 0.608,
-    "Good": 0.7576
+    "Poor": 0.7542,
+    "Standard": 0.599,
+    "Good": 0.7636
   },
   "f1_per_class": {
-    "Poor": 0.801,
-    "Standard": 0.806,
-    "Good": 0.7458
+    "Poor": 0.7971,
+    "Standard": 0.7966,
+    "Good": 0.749
   },
   "confusion_matrix": [
     [
-      3611,
-      627,
+      3652,
+      586,
       112
     ],
     [
-      1042,
-      6185,
-      749
+      1144,
+      5987,
+      845
     ],
     [
-      13,
-      559,
-      2102
+      17,
+      483,
+      2174
     ]
   ],
   "class_labels": [

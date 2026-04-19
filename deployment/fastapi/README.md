@@ -24,8 +24,8 @@ When MLflow source is resolved, the backend also fetches run metadata (metrics a
 ## Environment Variables
 
 - `MLFLOW_TRACKING_URI`: default is local `mlruns` under repository root
-- `MLFLOW_MODEL_NAME`: default prefers the registered model that has Production stage metadata (typically `lightgbm` in this repo)
-- `MLFLOW_MODEL_ALIAS`: default `Production`
+- `MLFLOW_MODEL_NAME`: default prefers the registered model that has Production stage metadata
+- `MLFLOW_MODEL_ALIAS`: default `production`
 - `MODEL_PATH_FALLBACK`: optional explicit local artifact path used in JSON fallback mode
 - `MLFLOW_EXPERIMENT_ID`: default `194323661774503133`
 

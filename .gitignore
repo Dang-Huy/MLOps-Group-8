@@ -60,3 +60,4 @@ htmlcov/
 # MLflow
 mlruns/
 mlartifacts/
+.temp
