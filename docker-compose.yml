@@ -20,6 +20,8 @@ services:
       # Mount artifacts so the JSON fallback and reports are accessible
       - ./artifacts:/app/artifacts:ro
       - ./data/reference:/app/data/reference:ro
+      # Mount MLflow artifact store so alias/stage source paths are readable by API
+      - ./.temp/mlruns:/mlflow/artifacts:ro
     depends_on:
       mlflow:
         condition: service_healthy
