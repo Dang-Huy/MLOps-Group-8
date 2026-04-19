@@ -13,7 +13,7 @@
     {% if model_info %}
       <div class="kv-row"><span>Model</span><strong>{{ model_display.get(model_info.model_name, model_info.model_name) or "—" }}</strong></div>
       <div class="kv-row"><span>Version</span><strong>{{ model_info.model_version or "—" }}</strong></div>
-      <div class="kv-row"><span>Source</span><strong>{{ source_display.get(model_info.source_resolved_from, model_info.source_resolved_from) or "—" }}</strong></div>
+      <div class="kv-row"><span>Source</span><strong><span class="badge badge-grey">{{ source_display.get(model_info.source_resolved_from, model_info.source_resolved_from) or "—" }}</span></strong></div>
       {% if model_info.metrics_core %}
         <div class="kv-row"><span>F1 (macro)</span><strong>{{ "%.4f"|format(model_info.metrics_core.get("final_test_f1_macro") or model_info.metrics_core.get("f1_macro") or 0) }}</strong></div>
         <div class="kv-row"><span>Accuracy</span><strong>{{ "%.4f"|format(model_info.metrics_core.get("final_test_accuracy") or model_info.metrics_core.get("accuracy") or 0) }}</strong></div>

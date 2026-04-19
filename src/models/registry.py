@@ -177,10 +177,15 @@ def register_model(
 
     Returns the created registry entry.
     """
+    try:
+        artifact_path_str = Path(artifact_path).resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        artifact_path_str = str(artifact_path)
+
     entry = {
         "model_name":    model_name,
         "version":       version,
-        "artifact_path": str(artifact_path),
+        "artifact_path": artifact_path_str,
         "metrics":       metrics,
         "params":        params or {},
         "tags":          tags or {},

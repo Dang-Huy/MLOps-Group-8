@@ -98,9 +98,11 @@ _MUTED_WARNING_FRAGMENTS = (
     "filesystem model registry",
     "model registry stages will be removed",
     # Expected fallback messages when MLflow is not configured locally
+    "MLflow client unavailable",
     "Could not resolve MLflow alias",
     "Failed to query MLflow",
     "No Production stage model version found",
+    "Could not search model versions",
     "Registered Model with name=",
 )
 

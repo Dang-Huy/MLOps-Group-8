@@ -112,7 +112,7 @@
   </div>
 
   <!-- Result panel -->
-  <div class="card result-card" id="result-panel" style="display:none">
+  <div class="card result-card hidden" id="result-panel">
     <div class="card-header">Result</div>
     <div id="result-content"></div>
   </div>
@@ -310,12 +310,20 @@ function showResult(r) {
     <div class="kv-row"><span>Confidence</span><strong>${(r.confidence*100).toFixed(1)}%</strong></div>
     <div class="kv-row"><span>Model</span><strong>${r.model_version}</strong></div>
     <div class="prob-section"><div class="section-label">Class Probabilities</div>${probRows}</div>`;
-  document.getElementById('result-panel').style.display = '';
+  _showResultPanel();
+}
+
+function _showResultPanel() {
+  const panel = document.getElementById('result-panel');
+  panel.classList.remove('hidden', 'visible');
+  // Force reflow to restart animation
+  void panel.offsetWidth;
+  panel.classList.add('visible');
 }
 
 function showError(msg) {
   document.getElementById('result-content').innerHTML = `<div class="alert alert-error">${msg}</div>`;
-  document.getElementById('result-panel').style.display = '';
+  _showResultPanel();
 }
 
 function clearForm() {
@@ -328,7 +336,9 @@ function clearForm() {
 }
 
 function clearResult() {
-  document.getElementById('result-panel').style.display = 'none';
+  const panel = document.getElementById('result-panel');
+  panel.classList.remove('visible');
+  panel.classList.add('hidden');
 }
 </script>
 {% endblock %}

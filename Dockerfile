@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r deployment-requirements.txt
 # Install remaining src-level dependencies (the ones not in deployment/requirements)
 COPY requirements.txt ./
 RUN pip install --no-cache-dir \
-      $(grep -v -E "^(fastapi|uvicorn|pydantic|mlflow|pandas|numpy|scikit-learn|lightgbm|joblib|python-dotenv|httpx|jinja2|aiofiles|prometheus|pytest)" requirements.txt | grep -v '^#' | grep -v '^$') || true
+      $(grep -v -E "^(fastapi|uvicorn|pydantic|mlflow|pandas|numpy|scikit-learn|lightgbm|joblib|python-dotenv|httpx|jinja2|aiofiles|prometheus|pytest|matplotlib|seaborn|plotly|ipykernel|notebook)" requirements.txt | grep -v '^#' | grep -v '^$') || true
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime

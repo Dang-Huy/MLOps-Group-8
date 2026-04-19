@@ -15,7 +15,7 @@ services:
     environment:
       # MLflow resolution: point to the mlflow service inside compose
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
-      MLFLOW_MODEL_NAME: "lightgbm"
+      MLFLOW_MODEL_NAME: "ensemble_soft_voting"
       MLFLOW_MODEL_ALIAS: "Production"
       MLFLOW_EXPERIMENT_ID: "194323661774503133"
     volumes:
@@ -43,11 +43,12 @@ services:
     volumes:
       - ./mlruns:/mlflow/mlruns
       - ./artifacts:/mlflow/artifacts
+      - mlflow_db:/mlflow/db
     command: >
       mlflow server
         --host 0.0.0.0
         --port 5000
-        --backend-store-uri /mlflow/mlruns
+        --backend-store-uri sqlite:////mlflow/db/mlflow.db
         --default-artifact-root /mlflow/artifacts
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -102,6 +103,7 @@ services:
 volumes:
   prometheus_data:
   grafana_data:
+  mlflow_db:
 
 networks:
   credit-score-net:

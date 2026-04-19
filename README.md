@@ -191,12 +191,25 @@ pytest tests/contract/      # needs running server
 
 ---
 
-## Model Results (LightGBM, test set — 15k samples)
+## Model Results (Ensemble Soft Voting, test set — 15k samples)
+
+Production model: `ensemble_soft_voting` (LightGBM + XGBoost + Random Forest)
 
 | Metric | Value |
 |--------|-------|
-| F1 Macro | 0.7809 |
-| Accuracy | 0.7875 |
-| AUC (OVR) | 0.9113 |
-| Precision Macro | 0.7672 |
-| Recall Macro | 0.8011 |
+| F1 Macro | 0.7876 |
+| Accuracy | 0.7959 |
+| AUC (OVR) | 0.9154 |
+| Precision Macro | 0.7786 |
+| Recall Macro | 0.7987 |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/architecture.md](docs/architecture.md) | System components, data flow, model resolution chain |
+| [docs/api_spec.md](docs/api_spec.md) | REST API reference with request/response schemas |
+| [docs/runbook.md](docs/runbook.md) | Operations guide: startup, retraining, troubleshooting |
+| [docs/git_workflow.md](docs/git_workflow.md) | Branch strategy, commit conventions, PR workflow |
