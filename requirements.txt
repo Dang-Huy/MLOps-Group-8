@@ -26,13 +26,5 @@ plotly>=5.18.0
 ipykernel>=6.29.0
 notebook>=7.1.0
 
-# Testing
-pytest>=8.0.0
-pytest-cov>=4.1.0
-pytest-asyncio>=0.23.0
-
-# Code quality
-ruff>=0.3.0
-
 # Misc
 tqdm>=4.66.0

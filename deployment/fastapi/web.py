@@ -22,6 +22,25 @@ _DRIFT_DIR = _REPO_ROOT / "artifacts" / "drift_reports"
 TEMPLATES = Jinja2Templates(directory=str(_FASTAPI_DIR / "templates"))
 router = APIRouter(tags=["Web UI"])
 
+# ── Display maps (single source of truth — passed to every template) ──────────
+
+MODEL_DISPLAY: dict[str, str] = {
+    "lightgbm":            "LightGBM",
+    "xgboost":             "XGBoost",
+    "random_forest":       "Random Forest",
+    "ensemble_soft_voting": "Ensemble (Soft Voting)",
+    "ensemble_weighted":   "Ensemble (Weighted)",
+    "catboost":            "CatBoost",
+}
+
+SOURCE_DISPLAY: dict[str, str] = {
+    "json_fallback":          "Local Registry (JSON)",
+    "mlflow_alias_production": "MLflow (alias)",
+    "mlflow_stage_production": "MLflow (stage)",
+}
+
+_DISPLAY_CTX = {"model_display": MODEL_DISPLAY, "source_display": SOURCE_DISPLAY}
+
 
 # ── Data loaders ──────────────────────────────────────────────────────────────
 
@@ -34,7 +53,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _read_csv_records(path: Path) -> list[dict]:
     try:
-        return pd.read_csv(path).to_dict(orient="records")
+        return pd.read_csv(path, encoding="utf-8").to_dict(orient="records")
     except Exception:
         return []
 
@@ -72,17 +91,39 @@ async def root_redirect():
     return RedirectResponse(url="/ui/", status_code=307)
 
 
+_MUTED_WARNING_FRAGMENTS = (
+    "FutureWarning",
+    "will be deprecated",
+    "filesystem tracking backend",
+    "filesystem model registry",
+    "model registry stages will be removed",
+    # Expected fallback messages when MLflow is not configured locally
+    "Could not resolve MLflow alias",
+    "Failed to query MLflow",
+    "No Production stage model version found",
+    "Registered Model with name=",
+)
+
+
+def _filter_warnings(warnings: list[str]) -> list[str]:
+    return [
+        w for w in warnings
+        if not any(frag in w for frag in _MUTED_WARNING_FRAGMENTS)
+    ]
+
+
 @router.get("/ui/", include_in_schema=False)
 async def home_page(request: Request):
     model_info: dict[str, Any] = {}
     try:
         from deployment.fastapi.main import _service
         if _service is not None:
-            model_info = _service.get_model_info()
+            model_info = dict(_service.get_model_info())
+            model_info["warnings"] = _filter_warnings(model_info.get("warnings", []))
     except Exception:
         pass
     return TEMPLATES.TemplateResponse(
-        request, "home.html", {"active": "home", "model_info": model_info}
+        request, "home.html", {"active": "home", "model_info": model_info, **_DISPLAY_CTX}
     )
 
 
@@ -97,5 +138,5 @@ async def predict_page(request: Request):
 async def monitor_page(request: Request):
     data = _load_monitor_data()
     return TEMPLATES.TemplateResponse(
-        request, "monitor.html", {"active": "monitor", **data}
+        request, "monitor.html", {"active": "monitor", **data, **_DISPLAY_CTX}
     )

@@ -37,10 +37,12 @@ grafana:
           disableDeletion: false
           options:
             path: /var/lib/grafana/dashboards/credit-score
-  dashboards:
-    credit-score:
-      api-dashboard:
-        url: https://raw.githubusercontent.com/YOUR_ORG/MLOps-Group-8/main/monitoring/grafana/dashboards/credit_score_api.json
+  # Dashboards are provisioned from the local ConfigMap/volume path defined above.
+  # To load from a remote URL, replace with:
+  #   dashboards:
+  #     credit-score:
+  #       api-dashboard:
+  #         url: https://raw.githubusercontent.com/<YOUR_ORG>/MLOps-Group-8/main/monitoring/grafana/dashboards/credit_score_api.json
 
 alertmanager:
   enabled: false

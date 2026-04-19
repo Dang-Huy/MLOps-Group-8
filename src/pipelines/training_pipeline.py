@@ -66,6 +66,7 @@ from src.features.build_features import build_features
 from src.features.selectors      import select_features
 
 # ── Models ────────────────────────────────────────────────────────────────────
+from src.models.ensemble  import SoftVotingEnsemble
 from src.models.evaluate  import evaluate, save_report
 from src.models.calibrate import calibrate_model, calibration_report, plot_calibration_curve
 from src.models.registry  import register_model, promote_to_production
@@ -380,7 +381,8 @@ def _train_evaluate(
 
     try:
         model.fit(X_train, y_train, **fit_kwargs)
-    except TypeError:
+    except TypeError as e:
+        logger.warning("fit_kwargs rejected by %s, retrying without: %s", type(model).__name__, e)
         model.fit(X_train, y_train)
 
     elapsed = round(time.time() - t0, 2)
@@ -611,44 +613,6 @@ def _tune_model(
     return model, params, metrics
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-# Module-level ensemble class (must be at module level for joblib to pickle it)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class SoftVotingEnsemble:
-    """
-    Picklable soft-voting ensemble over a dict of fitted classifiers.
-    Must be defined at module level (not inside a function) for joblib pickling.
-    """
-
-    def __init__(self, models: dict):
-        self._models = models
-
-    # sklearn clone() compatibility
-    def get_params(self, deep: bool = True) -> dict:
-        return {"models": self._models}
-
-    def set_params(self, **params) -> "SoftVotingEnsemble":
-        if "models" in params:
-            self._models = params["models"]
-        return self
-
-    def fit(self, X, y, **kwargs):
-        """No-op: base models are already fitted. Required for sklearn wrappers."""
-        return self
-
-    def predict_proba(self, X) -> np.ndarray:
-        return np.mean([m.predict_proba(X) for m in self._models.values()], axis=0)
-
-    def predict(self, X) -> np.ndarray:
-        return np.argmax(self.predict_proba(X), axis=1)
-
-    @property
-    def classes_(self) -> np.ndarray:
-        return np.array([0, 1, 2])
-
-
 # Build ensemble from 3 tuned models
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -735,12 +699,8 @@ def run_training_pipeline() -> ModelBundle:
     # ── 4. PREPROCESS ─────────────────────────────────────────────────────────
     logger.info("\n== 4. PREPROCESS ======================================")
     from src.data.preprocessing import encode_target
-    preprocess_out = preprocess(train_raw, valid_raw, test_raw)
-    if isinstance(preprocess_out, tuple) and len(preprocess_out) == 4:
-        train_clean, valid_clean, test_clean, annual_income_cap = preprocess_out
-    else:
-        train_clean, valid_clean, test_clean = preprocess_out
-        annual_income_cap = float(train_clean["Annual_Income"].max())
+    train_clean, valid_clean, test_clean = preprocess(train_raw, valid_raw, test_raw)
+    annual_income_cap = float(train_clean["Annual_Income"].max())
     # All three splits come from labelled train_raw, so encode target for test too
     test_clean = encode_target(test_clean)
 
