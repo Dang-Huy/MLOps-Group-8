@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: credit-score-api:latest
+          image: ruoc188/mlops-group8:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

@@ -14,23 +14,3 @@ spec:
       targetPort: 8000
       protocol: TCP
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: credit-score-api
-  namespace: credit-score
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  rules:
-    - host: credit-score.local
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: credit-score-api
-                port:
-                  number: 80

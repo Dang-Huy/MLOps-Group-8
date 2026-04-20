@@ -146,24 +146,100 @@ Panels: total predictions, error rate, request rate, p50/p95/p99 latency, class 
 
 ## Kubernetes Deployment
 
-```bash
-# Apply manifests (requires built image pushed to your registry)
-kubectl apply -f deployment/k8s/namespace.yaml
-kubectl apply -f deployment/k8s/configmap.yaml
-kubectl apply -f deployment/k8s/pvc.yaml
-kubectl apply -f deployment/k8s/api-deployment.yaml
-kubectl apply -f deployment/k8s/api-service.yaml
-kubectl apply -f deployment/k8s/hpa.yaml
+First-run flow for a new contributor who pulls the API image from Docker Hub and validates via `kubectl port-forward`.
 
-# Install Prometheus + Grafana via Helm
+Prerequisites:
+
+- Kubernetes is enabled (for example Docker Desktop Kubernetes).
+- Docker image is available on Docker Hub (manifest currently uses `ruoc188/mlops-group8:latest`).
+- MLflow is reachable from the API Pod at `http://host.docker.internal:5000` (configured in `deployment/k8s/configmap.yaml`).
+
+```bash
+docker pull ruoc188/mlops-group8:latest
+```
+
+Pulls the API image to your local Docker cache so Kubernetes can start Pods faster.
+
+```bash
+kubectl apply -f deployment/k8s/namespace.yaml
+```
+
+Creates the `credit-score` namespace used by all project resources.
+
+```bash
+kubectl apply -f deployment/k8s/configmap.yaml
+```
+
+Creates environment configuration for the API container (MLflow URI, model name, experiment ID).
+
+```bash
+kubectl apply -f deployment/k8s/api-deployment.yaml
+```
+
+Creates the API Deployment (1 replica, container image, probes, CPU/memory limits).
+
+```bash
+kubectl apply -f deployment/k8s/api-service.yaml
+```
+
+Creates a `ClusterIP` Service so traffic can be forwarded to the API Pod inside the cluster.
+
+```bash
+kubectl -n credit-score rollout status deploy/credit-score-api --timeout=180s
+```
+
+Waits until the Deployment finishes rolling out and the Pod becomes Ready.
+
+```bash
+kubectl -n credit-score get pods,svc
+```
+
+Shows current Pod and Service status in the `credit-score` namespace.
+
+```bash
+kubectl -n credit-score logs deploy/credit-score-api --tail=200
+```
+
+Prints recent API logs to diagnose startup or model-loading issues.
+
+```bash
+kubectl -n credit-score port-forward svc/credit-score-api 8000:80
+```
+
+Forwards local port `8000` to the in-cluster Service so you can call the API from your machine.
+
+After port-forward is running, open:
+
+- API docs: <http://127.0.0.1:8000/docs>
+- Health: <http://127.0.0.1:8000/health>
+- Model metadata: <http://127.0.0.1:8000/model-info>
+
+Optional for later stages:
+
+- `deployment/k8s/pvc.yaml`: enable only when you want external artifact storage mounted into the Pod.
+- `deployment/k8s/hpa.yaml`: enable when your cluster has metrics-server and you want autoscaling.
+
+Optional monitoring stack:
+
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+```
+
+Adds the official Prometheus Community chart repository to Helm.
+
+```bash
 helm repo update
+```
+
+Refreshes local Helm chart indexes so latest chart versions are available.
+
+```bash
 helm install monitoring prometheus-community/kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f deployment/k8s/helm-values.yaml
 ```
 
-The HPA scales between 2–8 replicas based on CPU (70%) and memory (80%) utilisation.
+Installs Prometheus + Grafana into the `monitoring` namespace using this project's custom values.
 
 ---
 
