@@ -5,6 +5,8 @@ Deployment orchestration -- validate then promote the model.
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import shutil
 import sys
 from pathlib import Path

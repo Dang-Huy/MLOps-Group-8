@@ -1,4 +1,6 @@
 """Smoke tests — minimal health checks that run without the model artifact."""
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
