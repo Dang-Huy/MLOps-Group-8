@@ -33,6 +33,8 @@ Usage
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import argparse
 import json
 import sys
@@ -407,8 +409,10 @@ def _load_processed_features(
 
     # Save for future runs
     (ROOT / "data" / "processed").mkdir(parents=True, exist_ok=True)
-    train_out = X_train.copy(); train_out[TARGET_COL] = y_train
-    valid_out = X_valid.copy(); valid_out[TARGET_COL] = y_valid
+    train_out = X_train.copy()
+    train_out[TARGET_COL] = y_train
+    valid_out = X_valid.copy()
+    valid_out[TARGET_COL] = y_valid
     train_out.to_parquet(train_feat, index=False)
     valid_out.to_parquet(valid_feat, index=False)
     logger.info("Feature matrices saved to data/processed/")

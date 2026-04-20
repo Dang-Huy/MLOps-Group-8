@@ -34,6 +34,8 @@ Usage
 
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import json
 import os
 import sys
@@ -1063,8 +1065,8 @@ def run_training_pipeline() -> ModelBundle:
     y_pred_test = np.argmax(y_prob_test, axis=1)
 
     sample_df = X_test.head(200).copy().reset_index(drop=True)
-    sample_df["y_true"]             = [LABEL_MAP[l] for l in y_test[:200]]
-    sample_df["y_pred"]             = [LABEL_MAP[l] for l in y_pred_test[:200]]
+    sample_df["y_true"]             = [LABEL_MAP[label_idx] for label_idx in y_test[:200]]
+    sample_df["y_pred"]             = [LABEL_MAP[label_idx] for label_idx in y_pred_test[:200]]
     sample_df["correct"]            = sample_df["y_true"] == sample_df["y_pred"]
     for k, cls in enumerate(CLASS_LABELS):
         sample_df[f"prob_{cls}"] = y_prob_test[:200, k]
