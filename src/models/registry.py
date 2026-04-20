@@ -10,7 +10,6 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from src.utils.logger import get_logger
 

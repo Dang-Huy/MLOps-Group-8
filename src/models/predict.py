@@ -9,7 +9,6 @@ Output : predicted classes, probabilities, decisions
 from __future__ import annotations
 
 from pathlib import Path
-import numpy as np
 import pandas as pd
 
 from src.models.serialize import load_bundle, ModelBundle

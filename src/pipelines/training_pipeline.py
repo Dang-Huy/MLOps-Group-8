@@ -355,8 +355,7 @@ def _safe_mlflow_log_model(
 def _build_models() -> dict:
     """Return 5 untrained sklearn-compatible classifiers."""
     from sklearn.linear_model  import LogisticRegression
-    from sklearn.ensemble      import RandomForestClassifier, ExtraTreesClassifier, VotingClassifier
-    from sklearn.utils.class_weight import compute_class_weight
+    from sklearn.ensemble      import RandomForestClassifier, ExtraTreesClassifier
 
     models: dict = {}
 
@@ -1138,7 +1137,7 @@ def run_training_pipeline() -> ModelBundle:
     _safe_mlflow_log_dir(mlflow_state, DRIFT_DIR, artifact_path="drift_reports")
     _safe_mlflow_log_artifact(mlflow_state, bundle_path, artifact_path="models")
 
-    registered_model_name = f"credit_score_serving"
+    registered_model_name = "credit_score_serving"
     logged_model = _safe_mlflow_log_model(
         mlflow_state,
         serving_model,
