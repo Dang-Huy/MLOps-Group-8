@@ -1,0 +1,222 @@
+# Runbook
+
+Operational guide for the Credit Score MLOps system.
+
+---
+
+## Local Development
+
+### Start the API
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Start with auto-reload
+uvicorn deployment.fastapi.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Web UI: http://localhost:8000/ui/  
+Swagger: http://localhost:8000/docs  
+Health: http://localhost:8000/health
+
+### Run Tests
+
+```bash
+# Install dev deps first
+pip install -r requirements-dev.txt
+
+pytest tests/ -v --tb=short
+pytest tests/unit/          # fast, no external deps
+pytest tests/integration/   # needs model bundle in artifacts/
+pytest tests/contract/      # needs running server on :8000
+```
+
+---
+
+## Docker Compose
+
+### Start All Services
+
+```bash
+# First run — builds the API image
+docker compose up --build
+
+# Subsequent runs
+docker compose up -d
+
+# View logs
+docker compose logs -f api
+docker compose logs -f mlflow
+```
+
+**Ports:**
+- API: http://localhost:8000
+- MLflow: http://localhost:5000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (default: admin / admin)
+
+### Stop
+
+```bash
+docker compose down          # stop and remove containers
+docker compose down -v       # also remove named volumes (data loss!)
+```
+
+### Set Grafana Password
+
+```bash
+cp .env.example .env
+# Edit .env: set GRAFANA_PASSWORD=your_password
+docker compose up -d grafana
+```
+
+---
+
+## Model Training
+
+### Full Retraining
+
+```bash
+python -m src.pipelines.training_pipeline
+```
+
+This runs HPO → ensemble → evaluation → registry update. Takes 15–30 min.  
+Output: `artifacts/models/final_model_bundle.pkl`, `artifacts/reports/`, `artifacts/drift_reports/`.
+
+### Hyperparameter Tuning Only
+
+```bash
+python -m src.pipelines.hyperparameter_tuning_pipeline \
+    --trials 100 --timeout 3600 --models lightgbm xgboost
+```
+
+### Batch Scoring
+
+```bash
+python -m src.pipelines.scoring_pipeline
+python -m src.pipelines.scoring_pipeline --input path/to/data.csv --no-drift
+```
+
+### Drift-Gated Retraining
+
+```bash
+python -m src.pipelines.retraining_pipeline          # retrain if PSI > threshold
+python -m src.pipelines.retraining_pipeline --force  # force retrain regardless
+```
+
+---
+
+## Promoting a New Model
+
+After training completes, the best model is automatically registered and promoted to `production` in `artifacts/models/model_registry.json`.
+
+To manually promote:
+
+```python
+from src.models.registry import promote_to_production
+promote_to_production("ensemble_soft_voting", "1.0.0")
+```
+
+Restart the API to pick up the new model:
+
+```bash
+# Local
+Ctrl+C and restart uvicorn
+
+# Docker
+docker compose restart api
+```
+
+---
+
+## Checking Model Info
+
+```bash
+# JSON endpoint
+curl http://localhost:8000/model-info | python -m json.tool
+
+# Health check
+curl http://localhost:8000/health
+```
+
+---
+
+## Checking Logs
+
+```bash
+# Local (stdout)
+uvicorn ... 2>&1 | tee server.log
+
+# Docker
+docker compose logs api --tail=100 -f
+docker compose logs mlflow --tail=50
+```
+
+---
+
+## Common Issues
+
+### Warning bar shows MLflow messages
+
+The warning bar on `/ui/` filters known MLflow fallback messages. If a new message type appears:
+
+1. Note the exact message text
+2. Add a fragment to `_MUTED_WARNING_FRAGMENTS` in `deployment/fastapi/web.py`
+3. Restart the server
+
+### Model loads but predictions seem wrong
+
+Check which model is active:
+
+```bash
+curl http://localhost:8000/model-info | python -m json.tool
+# Look at "source_resolved_from" and "model_name"
+```
+
+Expected: `model_name = "ensemble_soft_voting"`, `source_resolved_from = "json_fallback"` (local) or `"mlflow_alias_production"` (Docker with registered alias).
+
+If it shows `"lightgbm"` unexpectedly, verify `artifacts/models/model_registry.json` has `"production": {"model_name": "ensemble_soft_voting", "version": "1.0.0"}`.
+
+### model_registry.json shows absolute Windows path
+
+This was a known bug (now fixed in `src/models/registry.py`). If encountered, manually edit `model_registry.json`:
+
+```json
+"artifact_path": "artifacts/models/final_model_bundle.pkl"
+```
+
+### Docker healthcheck failing
+
+The healthcheck requires `curl` in the image. Verify the Dockerfile runtime stage includes:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+### Docker image too large
+
+Check `.dockerignore` is present in the repo root. Verify `mlruns/` is excluded (it can be 1+ GB). Expected image size: < 2GB after excluding notebooks/plotting packages.
+
+### MLflow SQLite backend (Docker only)
+
+MLflow uses SQLite at `/mlflow/db/mlflow.db` (persisted in named volume `mlflow_db`). The `mlruns/` directory is still mounted for artifact access but is no longer the backend store.
+
+If you need to reset the MLflow database:
+
+```bash
+docker compose down
+docker volume rm mlops-group-8_mlflow_db
+docker compose up -d mlflow
+```
+
+---
+
+## Drift Monitoring
+
+Drift reports are generated by the scoring pipeline and stored in `artifacts/drift_reports/`. The monitor page at `/ui/monitor` reads `powerbi_drift_summary.csv`.
+
+PSI threshold: > 0.2 triggers a retraining recommendation.
+
+Reference distribution: `data/reference/reference_data.parquet`

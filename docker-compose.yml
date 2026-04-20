@@ -1,0 +1,105 @@
+services:
+
+  # ── FastAPI inference + web UI ──────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: credit-score-api:latest
+    container_name: credit_score_api
+    ports:
+      - "8000:8000"
+    environment:
+      # MLflow resolution: point to the mlflow service inside compose
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      MLFLOW_MODEL_NAME: "credit_score_serving"
+      MLFLOW_MODEL_ALIAS: "production"
+      MLFLOW_EXPERIMENT_ID: "194323661774503133"
+    volumes:
+      # Mount artifacts so the JSON fallback and reports are accessible
+      - ./artifacts:/app/artifacts:ro
+      - ./data/reference:/app/data/reference:ro
+      # Mount MLflow artifact store so alias/stage source paths are readable by API
+      - ./.temp/mlruns:/mlflow/artifacts:ro
+    depends_on:
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - credit-score-net
+
+  # ── MLflow tracking server ──────────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    container_name: credit_score_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./.temp/mlruns:/mlflow/artifacts
+      - mlflow_db:/mlflow/db
+    command: >
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri sqlite:////mlflow/db/mlflow.db
+        --default-artifact-root /mlflow/artifacts
+    restart: unless-stopped
+    networks:
+      - credit-score-net
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: credit_score_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - credit-score-net
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: credit_score_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - credit-score-net
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  mlflow_db:
+
+networks:
+  credit-score-net:
+    driver: bridge

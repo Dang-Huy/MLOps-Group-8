@@ -35,10 +35,14 @@ Usage
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import warnings
+from datetime import datetime
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
@@ -63,6 +67,7 @@ from src.features.build_features import build_features
 from src.features.selectors      import select_features
 
 # ── Models ────────────────────────────────────────────────────────────────────
+from src.models.ensemble  import SoftVotingEnsemble
 from src.models.evaluate  import evaluate, save_report
 from src.models.calibrate import calibrate_model, calibration_report, plot_calibration_curve
 from src.models.registry  import register_model, promote_to_production
@@ -90,6 +95,257 @@ REF_DIR       = ROOT / "data" / "reference"
 SEED          = 42
 CLASS_LABELS  = ["Poor", "Standard", "Good"]
 LABEL_MAP     = {0: "Poor", 1: "Standard", 2: "Good"}
+TRAIN_SIZE    = 0.70
+VALID_SIZE    = 0.15
+TEST_SIZE     = 0.15
+
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _normalize_mlflow_tracking_uri(uri: str) -> str:
+    raw = (uri or "").strip()
+    if not raw:
+        return raw
+
+    # Keep non-filesystem tracking backends unchanged.
+    if raw in {"databricks", "databricks-uc", "uc"}:
+        return raw
+    if "://" in raw:
+        return raw
+
+    # Normalize local paths (relative/absolute, including Windows paths) to file URI.
+    try:
+        return Path(raw).expanduser().resolve().as_uri()
+    except Exception:
+        return raw
+
+
+def _get_mlflow_config() -> dict[str, Any]:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=ROOT / ".env")
+    except ImportError:
+        pass
+
+    default_tracking_uri = (ROOT / "mlruns").resolve().as_uri()
+    tracking_uri = _normalize_mlflow_tracking_uri(
+        os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri)
+    )
+    artifact_root = os.getenv("MLFLOW_ARTIFACT_ROOT", ".temp/mlruns")
+    artifact_root_path = Path(artifact_root).expanduser()
+    if not artifact_root_path.is_absolute():
+        artifact_root_path = ROOT / artifact_root_path
+    artifact_root_path = artifact_root_path.resolve()
+    artifact_root_path.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "enabled": _env_bool("MLFLOW_ENABLED", default=True),
+        "tracking_uri": tracking_uri,
+        "artifact_root_uri": artifact_root_path.as_uri(),
+        "artifact_root_path": str(artifact_root_path),
+        "experiment_name": os.getenv("MLFLOW_EXPERIMENT_NAME", "CreditScoringTraining"),
+        "run_name": os.getenv("MLFLOW_RUN_NAME", ""),
+    }
+
+
+def _same_uri(left: str, right: str) -> bool:
+    return left.strip().rstrip("/").lower() == right.strip().rstrip("/").lower()
+
+
+def _ensure_experiment_with_artifact_root(
+    client: Any,
+    base_name: str,
+    artifact_root_uri: str,
+) -> tuple[str, str]:
+    exp = client.get_experiment_by_name(base_name)
+    if exp is None:
+        exp_id = client.create_experiment(base_name, artifact_location=artifact_root_uri)
+        return base_name, str(exp_id)
+
+    current_location = str(getattr(exp, "artifact_location", "") or "")
+    if _same_uri(current_location, artifact_root_uri):
+        return str(exp.name), str(exp.experiment_id)
+
+    # Existing experiment points elsewhere; use a dedicated sibling experiment.
+    sibling_name = f"{base_name}_temp_mlruns"
+    sibling = client.get_experiment_by_name(sibling_name)
+    if sibling is None:
+        exp_id = client.create_experiment(sibling_name, artifact_location=artifact_root_uri)
+        return sibling_name, str(exp_id)
+
+    sibling_location = str(getattr(sibling, "artifact_location", "") or "")
+    if _same_uri(sibling_location, artifact_root_uri):
+        return str(sibling.name), str(sibling.experiment_id)
+
+    unique_name = f"{sibling_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    exp_id = client.create_experiment(unique_name, artifact_location=artifact_root_uri)
+    return unique_name, str(exp_id)
+
+
+def _init_mlflow_state() -> dict[str, Any]:
+    cfg = _get_mlflow_config()
+    state: dict[str, Any] = {
+        "enabled": False,
+        "mlflow": None,
+        "run_started": False,
+        "config": cfg,
+    }
+    if not cfg["enabled"]:
+        logger.info("MLflow tracking disabled by MLFLOW_ENABLED=false")
+        return state
+
+    try:
+        import mlflow  # type: ignore
+        from mlflow.tracking import MlflowClient  # type: ignore
+
+        mlflow.set_tracking_uri(cfg["tracking_uri"])
+        client = MlflowClient()
+        active_experiment_name, active_experiment_id = _ensure_experiment_with_artifact_root(
+            client,
+            cfg["experiment_name"],
+            cfg["artifact_root_uri"],
+        )
+        if active_experiment_name != cfg["experiment_name"]:
+            logger.warning(
+                "Experiment '%s' is configured with a different artifact location. "
+                "Using '%s' (id=%s) with artifact root '%s' instead.",
+                cfg["experiment_name"],
+                active_experiment_name,
+                active_experiment_id,
+                cfg["artifact_root_path"],
+            )
+            cfg["experiment_name"] = active_experiment_name
+
+        mlflow.set_experiment(cfg["experiment_name"])
+
+        tracking_scheme = urlparse(cfg["tracking_uri"]).scheme.lower()
+        if tracking_scheme in {"http", "https"}:
+            logger.info(
+                "Tracking server mode detected; experiment artifact location is managed by registry metadata."
+            )
+        state["enabled"] = True
+        state["mlflow"] = mlflow
+        logger.info(
+            "MLflow enabled: tracking_uri=%s, experiment=%s, artifact_root=%s",
+            cfg["tracking_uri"],
+            cfg["experiment_name"],
+            cfg["artifact_root_path"],
+        )
+    except Exception as e:
+        logger.warning("MLflow unavailable, continue without tracking: %s", e)
+    return state
+
+
+def _mlflow_start_run(state: dict[str, Any], fallback_name: str) -> None:
+    if not state.get("enabled") or state.get("mlflow") is None:
+        return
+    run_name = state["config"].get("run_name") or fallback_name
+    try:
+        state["mlflow"].start_run(run_name=run_name)
+        state["run_started"] = True
+    except Exception as e:
+        logger.warning("Failed to start MLflow run, continue without MLflow: %s", e)
+        state["enabled"] = False
+
+
+def _mlflow_end_run(state: dict[str, Any]) -> None:
+    if not state.get("enabled") or not state.get("run_started"):
+        return
+    try:
+        state["mlflow"].end_run()
+    except Exception as e:
+        logger.warning("Failed to end MLflow run: %s", e)
+
+
+def _safe_mlflow_log_param(state: dict[str, Any], key: str, value: Any) -> None:
+    if not state.get("enabled"):
+        return
+    try:
+        if isinstance(value, (dict, list, tuple, set)):
+            value = json.dumps(value, default=str)
+        state["mlflow"].log_param(key, value)
+    except Exception as e:
+        logger.warning("MLflow log_param failed for %s: %s", key, e)
+
+
+def _safe_mlflow_log_params(state: dict[str, Any], params: dict[str, Any]) -> None:
+    for key, value in params.items():
+        _safe_mlflow_log_param(state, key, value)
+
+
+def _safe_mlflow_log_metrics(state: dict[str, Any], metrics: dict[str, Any], prefix: str = "") -> None:
+    if not state.get("enabled"):
+        return
+    payload: dict[str, float] = {}
+    for key, value in metrics.items():
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool):
+            payload[f"{prefix}{key}"] = float(value)
+    if not payload:
+        return
+    try:
+        state["mlflow"].log_metrics(payload)
+    except Exception as e:
+        logger.warning("MLflow log_metrics failed for prefix %s: %s", prefix, e)
+
+
+def _safe_mlflow_log_metric(state: dict[str, Any], key: str, value: Any) -> None:
+    _safe_mlflow_log_metrics(state, {key: value})
+
+
+def _safe_mlflow_log_artifact(state: dict[str, Any], path: Path, artifact_path: str | None = None) -> None:
+    if not state.get("enabled") or not path.exists():
+        return
+    try:
+        state["mlflow"].log_artifact(str(path), artifact_path=artifact_path)
+    except Exception as e:
+        logger.warning("MLflow log_artifact failed for %s: %s", path, e)
+
+
+def _safe_mlflow_log_dir(state: dict[str, Any], directory: Path, artifact_path: str | None = None) -> None:
+    if not state.get("enabled") or not directory.exists():
+        return
+    try:
+        state["mlflow"].log_artifacts(str(directory), artifact_path=artifact_path)
+    except Exception as e:
+        logger.warning("MLflow log_artifacts failed for %s: %s", directory, e)
+
+
+def _safe_mlflow_log_model(
+    state: dict[str, Any],
+    model: Any,
+    artifact_path: str,
+    registered_model_name: str | None = None,
+) -> bool:
+    if not state.get("enabled"):
+        return False
+    try:
+        mlflow = state["mlflow"]
+        try:
+            import mlflow.sklearn  # type: ignore
+
+            mlflow.sklearn.log_model(
+                sk_model=model,
+                artifact_path=artifact_path,
+                registered_model_name=registered_model_name,
+            )
+            return True
+        except Exception:
+            pass
+
+        mlflow.pyfunc.log_model(
+            artifact_path=artifact_path,
+            python_model=model,
+            registered_model_name=registered_model_name,
+        )
+        return True
+    except Exception as e:
+        logger.warning("MLflow log_model failed, fallback to bundle artifact: %s", e)
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +439,7 @@ def _train_evaluate(
         sw = compute_sample_weight("balanced", y_train)
         fit_kwargs = {
             "sample_weight": sw,
-            "eval_set": [(X_valid.values, y_valid)],
+            "eval_set": [(X_valid, y_valid)],
             "verbose": False,
         }
         model.set_params(early_stopping_rounds=30)
@@ -200,7 +456,8 @@ def _train_evaluate(
 
     try:
         model.fit(X_train, y_train, **fit_kwargs)
-    except TypeError:
+    except TypeError as e:
+        logger.warning("fit_kwargs rejected by %s, retrying without: %s", type(model).__name__, e)
         model.fit(X_train, y_train)
 
     elapsed = round(time.time() - t0, 2)
@@ -272,7 +529,7 @@ def _tune_model(
         if "xgboost" in type(m).__module__:
             sw = compute_sample_weight("balanced", y_train)
             fit_kwargs = {"sample_weight": sw,
-                          "eval_set": [(X_valid.values, y_valid)], "verbose": False}
+                          "eval_set": [(X_valid, y_valid)], "verbose": False}
         elif "lightgbm" in type(m).__module__:
             sw = compute_sample_weight("balanced", y_train)
             fit_kwargs = {"sample_weight": sw,
@@ -362,7 +619,7 @@ def _tune_model(
                     verbosity=0, tree_method="hist",
                 )
                 m.fit(X_train, y_train, sample_weight=sw,
-                      eval_set=[(X_valid.values, y_valid)], verbose=False)
+                        eval_set=[(X_valid, y_valid)], verbose=False)
             else:
                 from sklearn.ensemble import GradientBoostingClassifier
                 m = GradientBoostingClassifier(
@@ -431,44 +688,6 @@ def _tune_model(
     return model, params, metrics
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-# Module-level ensemble class (must be at module level for joblib to pickle it)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class SoftVotingEnsemble:
-    """
-    Picklable soft-voting ensemble over a dict of fitted classifiers.
-    Must be defined at module level (not inside a function) for joblib pickling.
-    """
-
-    def __init__(self, models: dict):
-        self._models = models
-
-    # sklearn clone() compatibility
-    def get_params(self, deep: bool = True) -> dict:
-        return {"models": self._models}
-
-    def set_params(self, **params) -> "SoftVotingEnsemble":
-        if "models" in params:
-            self._models = params["models"]
-        return self
-
-    def fit(self, X, y, **kwargs):
-        """No-op: base models are already fitted. Required for sklearn wrappers."""
-        return self
-
-    def predict_proba(self, X) -> np.ndarray:
-        return np.mean([m.predict_proba(X) for m in self._models.values()], axis=0)
-
-    def predict(self, X) -> np.ndarray:
-        return np.argmax(self.predict_proba(X), axis=1)
-
-    @property
-    def classes_(self) -> np.ndarray:
-        return np.array([0, 1, 2])
-
-
 # Build ensemble from 3 tuned models
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -513,6 +732,20 @@ def run_training_pipeline() -> ModelBundle:
     DRIFT_DIR.mkdir(parents=True, exist_ok=True)
     REF_DIR.mkdir(parents=True, exist_ok=True)
 
+    mlflow_state = _init_mlflow_state()
+    fallback_run_name = f"training_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    _mlflow_start_run(mlflow_state, fallback_run_name)
+    _safe_mlflow_log_params(
+        mlflow_state,
+        {
+            "seed": SEED,
+            "train_size": TRAIN_SIZE,
+            "valid_size": VALID_SIZE,
+            "test_size": TEST_SIZE,
+            "target_col": TARGET_COL,
+        },
+    )
+
     # ── 1. INGEST ─────────────────────────────────────────────────────────────
     logger.info("\n== 1. INGEST ==========================================")
     train_raw_full, _ = load_raw()   # Only use train_raw.csv
@@ -525,15 +758,24 @@ def run_training_pipeline() -> ModelBundle:
     # ── 3. SPLIT 70/15/15 ────────────────────────────────────────────────────
     logger.info("\n== 3. SPLIT (70/15/15) ================================")
     train_raw, valid_raw, test_raw = split_train_valid_test(
-        train_raw_full, train_size=0.70, valid_size=0.15, test_size=0.15,
+        train_raw_full, train_size=TRAIN_SIZE, valid_size=VALID_SIZE, test_size=TEST_SIZE,
         random_state=SEED,
     )
     save_splits(train_raw, valid_raw, test_raw)
+    _safe_mlflow_log_params(
+        mlflow_state,
+        {
+            "n_train_rows": len(train_raw),
+            "n_valid_rows": len(valid_raw),
+            "n_test_rows": len(test_raw),
+        },
+    )
 
     # ── 4. PREPROCESS ─────────────────────────────────────────────────────────
     logger.info("\n== 4. PREPROCESS ======================================")
     from src.data.preprocessing import encode_target
-    train_clean, valid_clean, test_clean, annual_income_cap = preprocess(train_raw, valid_raw, test_raw)
+    train_clean, valid_clean, test_clean = preprocess(train_raw, valid_raw, test_raw)
+    annual_income_cap = float(train_clean["Annual_Income"].max())
     # All three splits come from labelled train_raw, so encode target for test too
     test_clean = encode_target(test_clean)
 
@@ -583,10 +825,18 @@ def run_training_pipeline() -> ModelBundle:
         X_test  = X_test.fillna(0)
 
     logger.info(f"X_train {X_train.shape}  X_valid {X_valid.shape}  X_test {X_test.shape}")
+    _safe_mlflow_log_params(
+        mlflow_state,
+        {
+            "n_features_after_selection": X_train.shape[1],
+            "annual_income_cap": float(annual_income_cap),
+        },
+    )
 
     # ── 9. TRAIN 5 CANDIDATE MODELS ───────────────────────────────────────────
     logger.info("\n== 9. TRAIN 5 MODELS ==================================")
     candidate_models = _build_models()
+    _safe_mlflow_log_param(mlflow_state, "candidate_models", list(candidate_models.keys()))
     raw_results:  list[dict]  = []
     fitted_models: dict[str, object] = {}
 
@@ -594,6 +844,7 @@ def run_training_pipeline() -> ModelBundle:
         fitted, metrics = _train_evaluate(name, model, X_train, y_train, X_valid, y_valid)
         raw_results.append(metrics)
         fitted_models[name] = fitted
+        _safe_mlflow_log_metrics(mlflow_state, metrics, prefix=f"raw_{name}_")
 
     # ── 10. RANK ALL 5 ────────────────────────────────────────────────────────
     logger.info("\n== 10. RANK MODELS ====================================")
@@ -613,6 +864,7 @@ def run_training_pipeline() -> ModelBundle:
 
     top3_names = ranking_df.head(3)["model_name"].tolist()
     logger.info(f"Top-3: {top3_names}")
+    _safe_mlflow_log_param(mlflow_state, "top3_models", top3_names)
 
     # Save 5-model comparison CSV (Power BI)
     raw_df = pd.DataFrame(raw_results)
@@ -655,15 +907,18 @@ def run_training_pipeline() -> ModelBundle:
         tuned_models[name]    = model
         tuning_results.append(metrics)
         best_params_all[name] = params
+        _safe_mlflow_log_metrics(mlflow_state, metrics, prefix=f"tuned_{name}_")
 
     tuning_df = pd.DataFrame(tuning_results)
     write_csv(tuning_df, REPORT_DIR / "top3_tuning_results.csv")
     write_json(best_params_all, REPORT_DIR / "best_hyperparameters.json")
+    _safe_mlflow_log_param(mlflow_state, "best_params_all", best_params_all)
     logger.info(f"\n{tuning_df[['model_name','f1_macro','f1_weighted','accuracy']].to_string(index=False)}")
 
     # ── 12. BUILD ENSEMBLE ────────────────────────────────────────────────────
     logger.info("\n== 12. ENSEMBLE =======================================")
     ensemble, ensemble_metrics = _build_ensemble(tuned_models, X_valid, y_valid)
+    _safe_mlflow_log_metrics(mlflow_state, ensemble_metrics, prefix="ensemble_")
 
     # ── 13. FINAL COMPARISON ──────────────────────────────────────────────────
     logger.info("\n== 13. FINAL COMPARISON ===============================")
@@ -698,6 +953,15 @@ def run_training_pipeline() -> ModelBundle:
                             "Single model preferred for simpler inference.")
 
     logger.info(f"Final model: {final_model_name} -- {justification}")
+    _safe_mlflow_log_params(
+        mlflow_state,
+        {
+            "final_model_name": final_model_name,
+            "final_model_type": type(final_model).__name__,
+            "final_model_justification": justification,
+        },
+    )
+    _safe_mlflow_log_metrics(mlflow_state, final_metrics, prefix="final_valid_selection_")
     write_json(
         {"final_model": final_model_name, "justification": justification, **final_metrics},
         REPORT_DIR / "final_model_selection.json",
@@ -705,10 +969,13 @@ def run_training_pipeline() -> ModelBundle:
 
     # ── 15. FULL EVALUATION ON VALID + TEST ───────────────────────────────────
     logger.info("\n== 15. FULL EVALUATION ================================")
+    eval_reports: dict[str, dict] = {}
     for X, y, split_name in [(X_valid, y_valid, "valid"), (X_test, y_test, "test")]:
         y_prob_eval = final_model.predict_proba(X)
         y_pred_eval = np.argmax(y_prob_eval, axis=1)
         report      = evaluate(y, y_pred_eval, y_prob_eval, split=split_name)
+        eval_reports[split_name] = report
+        _safe_mlflow_log_metrics(mlflow_state, report, prefix=f"final_{split_name}_")
         save_report(report, f"eval_{split_name}_final.json")
 
         # Confusion matrix plot
@@ -724,6 +991,7 @@ def run_training_pipeline() -> ModelBundle:
         write_json(cal_report, REPORT_DIR / "calibration_report.json")
         plot_calibration_curve(y_valid, y_prob_before, y_prob_cal,
                                save_path=REPORT_DIR / "calibration_curve.png")
+        _safe_mlflow_log_metrics(mlflow_state, cal_report, prefix="calibration_")
         serving_model = cal_model
         logger.info(f"  ECE before={cal_report['ece_before_mean']:.4f}  after={cal_report['ece_after_mean']:.4f}")
     except Exception as e:
@@ -774,6 +1042,7 @@ def run_training_pipeline() -> ModelBundle:
             write_csv(fair_df, REPORT_DIR / "fairness_report.csv")
             summary = fairness_summary(fair_df)
             write_json(summary, REPORT_DIR / "fairness_summary.json")
+            _safe_mlflow_log_metrics(mlflow_state, summary, prefix="fairness_")
             logger.info(f"  Fairness disparity gap: {summary.get('disparity_gap', 'N/A')}")
     except Exception as e:
         logger.warning(f"  Fairness analysis failed: {e}")
@@ -849,21 +1118,53 @@ def run_training_pipeline() -> ModelBundle:
     )
     bundle_path = save_bundle(bundle, MODEL_DIR / "final_model_bundle.pkl")
 
+    _safe_mlflow_log_params(
+        mlflow_state,
+        {
+            "metadata_model_version": metadata["model_version"],
+            "metadata_final_model_name": metadata["final_model_name"],
+            "metadata_top3_models": metadata["top3_models"],
+            "metadata_n_train_rows": metadata["n_train_rows"],
+            "metadata_n_valid_rows": metadata["n_valid_rows"],
+            "metadata_n_test_rows": metadata["n_test_rows"],
+        },
+    )
+    _safe_mlflow_log_metric(mlflow_state, "training_time_total", metadata["training_time_total"])
+
+    # Primary artifacts: reports, predictions, drift, and final bundle.
+    _safe_mlflow_log_dir(mlflow_state, REPORT_DIR, artifact_path="reports")
+    sample_path = PRED_DIR / "sample_predictions.csv"
+    _safe_mlflow_log_artifact(mlflow_state, sample_path, artifact_path="predictions")
+    _safe_mlflow_log_dir(mlflow_state, DRIFT_DIR, artifact_path="drift_reports")
+    _safe_mlflow_log_artifact(mlflow_state, bundle_path, artifact_path="models")
+
+    registered_model_name = f"credit_score_serving"
+    logged_model = _safe_mlflow_log_model(
+        mlflow_state,
+        serving_model,
+        artifact_path="serving_model",
+        registered_model_name=registered_model_name,
+    )
+    if not logged_model:
+        _safe_mlflow_log_artifact(mlflow_state, bundle_path, artifact_path="models")
+
     # Register in model registry
     register_model(
-        model_name    = final_model_name,
+        model_name    = registered_model_name,
         version       = "1.0.0",
         artifact_path = bundle_path,
         metrics       = final_metrics if isinstance(final_metrics, dict) else {},
         tags          = {"pipeline": "training_pipeline_v1"},
     )
-    promote_to_production(final_model_name, "1.0.0")
+    promote_to_production(registered_model_name, "1.0.0")
 
     total_time = round(time.time() - t_start, 1)
+    _safe_mlflow_log_metric(mlflow_state, "training_time_total", total_time)
     logger.info(f"\n== PIPELINE COMPLETE in {total_time}s ======================")
-    logger.info(f"  Final model      : {final_model_name}")
+    logger.info(f"  Final model      : {registered_model_name}")
     logger.info(f"  Bundle           : {bundle_path}")
     logger.info(f"  Reports dir      : {REPORT_DIR}")
+    _mlflow_end_run(mlflow_state)
     return bundle
 
 

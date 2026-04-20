@@ -41,6 +41,6 @@ def load_raw(
     train = pd.read_csv(train_path, low_memory=False)
     test  = pd.read_csv(test_path,  low_memory=False)
 
-    print(f"[ingestion] train_raw : {train.shape}  ← {train_path}")
-    print(f"[ingestion] test_raw  : {test.shape}  ← {test_path}")
+    print(f"[ingestion] train_raw : {train.shape}  <- {train_path}")
+    print(f"[ingestion] test_raw  : {test.shape}  <- {test_path}")
     return train, test

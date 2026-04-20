@@ -1,0 +1,48 @@
+# Helm values for kube-prometheus-stack
+# Install with:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f deployment/k8s/helm-values.yaml
+
+prometheus:
+  prometheusSpec:
+    # Scrape all pods with prometheus.io/scrape=true annotations
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  adminPassword: "admin"
+  persistence:
+    enabled: true
+    size: 2Gi
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: credit-score
+          orgId: 1
+          folder: Credit Score
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/credit-score
+  # Dashboards are provisioned from the local ConfigMap/volume path defined above.
+  # To load from a remote URL, replace with:
+  #   dashboards:
+  #     credit-score:
+  #       api-dashboard:
+  #         url: https://raw.githubusercontent.com/<YOUR_ORG>/MLOps-Group-8/main/monitoring/grafana/dashboards/credit_score_api.json
+
+alertmanager:
+  enabled: false

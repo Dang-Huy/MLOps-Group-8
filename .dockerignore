@@ -1,0 +1,44 @@
+# Large data and tracking directories — not needed in image
+mlruns/
+data/raw/
+data/processed/
+data/interim/
+
+# Git history
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Notebooks and development tools
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# Tests
+tests/
+
+# Documentation sources
+docs/
+*.md
+!README.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS artifacts
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db

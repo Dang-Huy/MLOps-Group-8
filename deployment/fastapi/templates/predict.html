@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}Predict — CreditScore ML{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Credit Score Prediction</h1>
+<p class="page-subtitle">Enter customer details to classify credit risk into Poor / Standard / Good.</p>
+
+<div class="predict-layout">
+  <!-- Form -->
+  <div class="card form-card">
+    <div class="card-header">Customer Details</div>
+    <p class="muted" style="margin-bottom:14px;font-size:12px;">All fields are optional — more details improve prediction accuracy.</p>
+    <form id="predict-form" onsubmit="runPrediction(event)">
+
+      <fieldset>
+        <legend>Demographics &amp; Income</legend>
+        <div class="field-row">
+          <label>Age (years)<input type="number" name="Age" min="18" max="100" placeholder="34" /></label>
+          <label>Annual Income ($)<input type="number" name="Annual_Income" min="0" step="100" placeholder="78000" /></label>
+          <label>Monthly Salary ($)<input type="number" name="Monthly_Inhand_Salary" min="0" step="50" placeholder="5200" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Accounts &amp; Credit Cards</legend>
+        <div class="field-row">
+          <label>Bank Accounts<input type="number" name="Num_Bank_Accounts" min="0" placeholder="4" /></label>
+          <label>Credit Cards<input type="number" name="Num_Credit_Card" min="0" placeholder="3" /></label>
+          <label>Interest Rate (%)<input type="number" name="Interest_Rate" min="0" max="100" placeholder="12" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Loans &amp; Payments</legend>
+        <div class="field-row">
+          <label>Number of Loans<input type="number" name="Num_of_Loan" min="0" placeholder="2" /></label>
+          <label>Days Overdue<input type="number" name="Delay_from_due_date" min="0" placeholder="3" /></label>
+          <label>Delayed Payments<input type="number" name="Num_of_Delayed_Payment" min="0" placeholder="1" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Debt &amp; Utilisation</legend>
+        <div class="field-row">
+          <label>Credit Limit Change ($)<input type="number" name="Changed_Credit_Limit" step="0.1" placeholder="8.5" /></label>
+          <label>Credit Inquiries<input type="number" name="Num_Credit_Inquiries" min="0" placeholder="2" /></label>
+          <label>Outstanding Debt ($)<input type="number" name="Outstanding_Debt" min="0" step="10" placeholder="1200" /></label>
+        </div>
+        <div class="field-row">
+          <label>Utilisation Ratio (%)<input type="number" name="Credit_Utilization_Ratio" min="0" max="100" step="0.1" placeholder="24.3" /></label>
+          <label>Credit History (months)<input type="number" name="Credit_History_Age" min="0" placeholder="86" /></label>
+          <label>Total EMI / Month ($)<input type="number" name="Total_EMI_per_month" min="0" step="10" placeholder="350" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Savings &amp; Behaviour</legend>
+        <div class="field-row">
+          <label>Monthly Investment ($)<input type="number" name="Amount_invested_monthly" min="0" step="10" placeholder="500" /></label>
+          <label>Monthly Balance ($)<input type="number" name="Monthly_Balance" min="0" step="50" placeholder="1800" /></label>
+        </div>
+        <div class="field-row">
+          <label>Occupation
+            <!-- Searchable combobox — hidden select carries the actual form value -->
+            <div class="combobox-wrap" id="cb-occupation-wrap">
+              <input type="text" class="combobox-input" id="cb-occupation-input"
+                     placeholder="Search occupation…" autocomplete="off" />
+              <select name="Occupation" id="cb-occupation-select" style="display:none">
+                <option value=""></option>
+                <option>Scientist</option><option>Teacher</option><option>Engineer</option>
+                <option>Entrepreneur</option><option>Developer</option><option>Lawyer</option>
+                <option>Media_Manager</option><option>Doctor</option><option>Journalist</option>
+                <option>Manager</option><option>Accountant</option><option>Musician</option>
+                <option>Mechanic</option><option>Writer</option><option>Architect</option>
+              </select>
+              <div class="combobox-dropdown" id="cb-occupation-dropdown"></div>
+            </div>
+          </label>
+          <label>Credit Mix
+            <select name="Credit_Mix">
+              <option value="">— select —</option>
+              <option>Good</option><option>Standard</option><option>Bad</option>
+            </select>
+          </label>
+          <label>Paid Minimum Amount?
+            <select name="Payment_of_Min_Amount">
+              <option value="">— select —</option>
+              <option>Yes</option><option>No</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Payment Behaviour
+            <select name="Payment_Behaviour">
+              <option value="">— select —</option>
+              <option value="High_spent_Small_value_payments">High Spend — Small Value</option>
+              <option value="Low_spent_Small_value_payments">Low Spend — Small Value</option>
+              <option value="High_spent_Medium_value_payments">High Spend — Medium Value</option>
+              <option value="Low_spent_Medium_value_payments">Low Spend — Medium Value</option>
+              <option value="High_spent_Large_value_payments">High Spend — Large Value</option>
+              <option value="Low_spent_Large_value_payments">Low Spend — Large Value</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submit-btn">Predict</button>
+        <button type="button" class="btn btn-ghost" onclick="clearForm()">Clear</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Result panel -->
+  <div class="card result-card hidden" id="result-panel">
+    <div class="card-header">Result</div>
+    <div id="result-content"></div>
+  </div>
+</div>
+
+<script>
+// ── Searchable combobox ───────────────────────────────────────────────��──────
+(function() {
+  const input    = document.getElementById('cb-occupation-input');
+  const select   = document.getElementById('cb-occupation-select');
+  const dropdown = document.getElementById('cb-occupation-dropdown');
+
+  const allOptions = Array.from(select.options)
+    .filter(o => o.value !== '')
+    .map(o => o.value);
+
+  function renderDropdown(items) {
+    if (!items.length) {
+      dropdown.innerHTML = '<div class="combobox-empty">No matches</div>';
+    } else {
+      dropdown.innerHTML = items.map(v =>
+        `<div class="combobox-option" data-value="${v}">${v}</div>`
+      ).join('');
+    }
+    dropdown.classList.add('open');
+    bindOptionClicks();
+  }
+
+  function bindOptionClicks() {
+    dropdown.querySelectorAll('.combobox-option').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectValue(el.dataset.value);
+      });
+    });
+  }
+
+  function selectValue(val) {
+    input.value = val;
+    select.value = val;
+    dropdown.classList.remove('open');
+    // Mark selected visually
+    dropdown.querySelectorAll('.combobox-option').forEach(el => {
+      el.classList.toggle('selected', el.dataset.value === val);
+    });
+  }
+
+  input.addEventListener('focus', () => {
+    renderDropdown(allOptions);
+  });
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase();
+    const filtered = allOptions.filter(v => v.toLowerCase().includes(q));
+    renderDropdown(filtered);
+    // If input cleared, also clear the hidden select
+    if (!input.value) select.value = '';
+  });
+
+  input.addEventListener('blur', () => {
+    // Delay so mousedown on option fires first
+    setTimeout(() => dropdown.classList.remove('open'), 150);
+    // If typed text doesn't match any option exactly, clear it
+    if (!allOptions.includes(input.value)) {
+      input.value = '';
+      select.value = '';
+    }
+  });
+
+  // Keyboard navigation
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.combobox-option');
+    const highlighted = dropdown.querySelector('.combobox-option.highlighted');
+    let idx = Array.from(items).indexOf(highlighted);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (idx < items.length - 1) idx++;
+      else idx = 0;
+      items.forEach(el => el.classList.remove('highlighted'));
+      if (items[idx]) items[idx].classList.add('highlighted');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx > 0) idx--;
+      else idx = items.length - 1;
+      items.forEach(el => el.classList.remove('highlighted'));
+      if (items[idx]) items[idx].classList.add('highlighted');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlighted) selectValue(highlighted.dataset.value);
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('open');
+      input.blur();
+    }
+  });
+})();
+
+// ── Inline field validation helpers ─────────────────────────────────────────
+function clearFieldErrors() {
+  document.querySelectorAll('.field-error').forEach(el => el.classList.remove('field-error'));
+  document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+}
+
+function markFieldError(fieldName, msg) {
+  // Find the label containing the input or select with this name
+  const el = document.querySelector(`[name="${fieldName}"]`);
+  if (!el) return;
+  const label = el.closest('label');
+  if (!label) return;
+  label.classList.add('field-error');
+  const errEl = document.createElement('span');
+  errEl.className = 'field-error-msg';
+  errEl.textContent = msg;
+  label.appendChild(errEl);
+}
+
+// ── Prediction ───────────────────────────────────────────────────────────────
+async function runPrediction(e) {
+  e.preventDefault();
+  clearFieldErrors();
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Predicting…';
+
+  const form = document.getElementById('predict-form');
+  const data = {};
+  const categoricalFields = ['Occupation','Credit_Mix','Payment_of_Min_Amount','Payment_Behaviour'];
+  new FormData(form).forEach((v, k) => {
+    if (v !== '') {
+      data[k] = (!isNaN(v) && !categoricalFields.includes(k)) ? parseFloat(v) : v;
+    }
+  });
+
+  try {
+    const resp = await fetch('/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      // Try to map 422 validation errors to specific fields
+      if (resp.status === 422 && Array.isArray(err.detail)) {
+        let hasFieldErrors = false;
+        err.detail.forEach(d => {
+          const loc = d.loc || [];
+          // loc format: ["body", "field_name"] or ["body", "field_name", ...]
+          const fieldName = loc.length >= 2 ? loc[loc.length - 1] : null;
+          if (fieldName && fieldName !== 'body') {
+            markFieldError(String(fieldName), d.msg || 'Invalid value');
+            hasFieldErrors = true;
+          }
+        });
+        if (!hasFieldErrors) {
+          showError(err.detail.map(d => d.msg).join('; ') || JSON.stringify(err));
+        } else {
+          showError('Please fix the highlighted fields below.');
+        }
+      } else {
+        showError((err.detail && typeof err.detail === 'string') ? err.detail : JSON.stringify(err));
+      }
+    } else {
+      showResult(await resp.json());
+    }
+  } catch (ex) {
+    showError(ex.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Predict';
+  }
+}
+
+function showResult(r) {
+  const cls = r.predicted_class;
+  const colorMap = {Poor: 'badge-red', Standard: 'badge-amber', Good: 'badge-green'};
+  const badgeCls = colorMap[cls] || 'badge-grey';
+  const actionDisplay = {
+    manual_review: 'Manual Review', approve: 'Approve', reject: 'Reject',
+    review: 'Review', flag: 'Flag for Review', accept: 'Accept'
+  };
+
+  const probRows = Object.entries(r.probabilities)
+    .sort((a,b) => b[1]-a[1])
+    .map(([label, p]) => `
+      <div class="prob-row">
+        <span class="prob-label">${label}</span>
+        <div class="prob-bar-wrap"><div class="prob-bar ${colorMap[label]||''}" style="width:${(p*100).toFixed(1)}%"></div></div>
+        <span class="prob-value">${(p*100).toFixed(1)}%</span>
+      </div>`).join('');
+
+  document.getElementById('result-content').innerHTML = `
+    <div class="result-class"><span class="badge ${badgeCls}">${cls}</span></div>
+    <div class="kv-row"><span>Decision</span><strong>${r.decision}</strong></div>
+    <div class="kv-row"><span>Action</span><strong>${actionDisplay[r.action] || r.action}</strong></div>
+    <div class="kv-row"><span>Confidence</span><strong>${(r.confidence*100).toFixed(1)}%</strong></div>
+    <div class="kv-row"><span>Model</span><strong>${r.model_version}</strong></div>
+    <div class="prob-section"><div class="section-label">Class Probabilities</div>${probRows}</div>`;
+  _showResultPanel();
+}
+
+function _showResultPanel() {
+  const panel = document.getElementById('result-panel');
+  panel.classList.remove('hidden', 'visible');
+  // Force reflow to restart animation
+  void panel.offsetWidth;
+  panel.classList.add('visible');
+}
+
+function showError(msg) {
+  document.getElementById('result-content').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+  _showResultPanel();
+}
+
+function clearForm() {
+  document.getElementById('predict-form').reset();
+  // Also reset the occupation combobox display
+  const cbInput = document.getElementById('cb-occupation-input');
+  if (cbInput) cbInput.value = '';
+  clearFieldErrors();
+  clearResult();
+}
+
+function clearResult() {
+  const panel = document.getElementById('result-panel');
+  panel.classList.remove('visible');
+  panel.classList.add('hidden');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+timestamp,feature,issue_type,value,threshold,alert
+2026-04-19T19:52:12.734635,Name,missing_rate,0.0994,0.3,NO
+2026-04-19T19:52:12.734635,Monthly_Inhand_Salary,missing_rate,0.1501,0.3,NO
+2026-04-19T19:52:12.734635,Type_of_Loan,missing_rate,0.1129,0.3,NO
+2026-04-19T19:52:12.734635,Num_of_Delayed_Payment,missing_rate,0.0707,0.3,NO
+2026-04-19T19:52:12.734635,Num_Credit_Inquiries,missing_rate,0.0206,0.3,NO
+2026-04-19T19:52:12.734635,Credit_History_Age,missing_rate,0.0897,0.3,NO
+2026-04-19T19:52:12.734635,Amount_invested_monthly,missing_rate,0.0429,0.3,NO
+2026-04-19T19:52:12.734635,Monthly_Balance,missing_rate,0.0116,0.3,NO
+2026-04-19T19:52:12.734635,Age,out_of_range_count,1228.0,0.0,YES
+2026-04-19T19:52:12.734635,Interest_Rate,out_of_range_count,325.0,0.0,YES
+2026-04-19T19:52:12.734635,Num_Bank_Accounts,out_of_range_count,199.0,0.0,YES
+2026-04-19T19:52:12.734635,Num_Credit_Card,out_of_range_count,359.0,0.0,YES
+2026-04-19T19:52:12.734635,Num_Credit_Inquiries,out_of_range_count,236.0,0.0,YES
+2026-04-19T19:52:12.734635,Num_of_Loan,out_of_range_count,605.0,0.0,YES
+2026-04-19T19:52:12.734635,Delay_from_due_date,out_of_range_count,78.0,0.0,YES

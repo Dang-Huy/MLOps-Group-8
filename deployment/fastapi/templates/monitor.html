@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Monitor — CreditScore ML{% endblock %}
+
+{% block content %}
+{# model_display is injected by web.py #}
+
+<h1 class="page-title">Monitoring Dashboard</h1>
+<p class="page-subtitle">Performance metrics, prediction distribution, drift detection, and fairness analysis.</p>
+
+{% if not eval and not pred_dist and not drift and not ranking and not fairness %}
+<div class="alert alert-warning">No monitoring data found in <code>artifacts/reports/</code>. Run the training pipeline first.</div>
+{% endif %}
+
+<!-- ══ SECTION 1: PERFORMANCE ════════════════════════════════════════════════ -->
+
+<!-- Summary metric cards -->
+<div class="metric-grid">
+  {% set f1 = eval.get('f1_macro') %}
+  {% set acc = eval.get('accuracy') %}
+  {% set auc = eval.get('auc_ovr') %}
+  {% set prec = eval.get('precision_macro') %}
+  {% set rec = eval.get('recall_macro') %}
+  <div class="metric-card"><div class="metric-value">{{ "%.4f"|format(f1) if f1 is not none else "—" }}</div><div class="metric-label">F1 Macro</div></div>
+  <div class="metric-card"><div class="metric-value">{{ "%.4f"|format(acc) if acc is not none else "—" }}</div><div class="metric-label">Accuracy</div></div>
+  <div class="metric-card"><div class="metric-value">{{ "%.4f"|format(auc) if auc is not none else "—" }}</div><div class="metric-label">AUC (OVR)</div></div>
+  <div class="metric-card"><div class="metric-value">{{ "%.4f"|format(prec) if prec is not none else "—" }}</div><div class="metric-label">Precision</div></div>
+  <div class="metric-card"><div class="metric-value">{{ "%.4f"|format(rec) if rec is not none else "—" }}</div><div class="metric-label">Recall</div></div>
+  {% if selection %}<div class="metric-card"><div class="metric-value model-name-val">{{ model_display.get(selection.get('final_model', ''), selection.get('final_model', '—')) }}</div><div class="metric-label">Model</div></div>{% endif %}
+</div>
+
+<!-- API Latency -->
+{% if latency %}
+<div class="section-title">API Latency</div>
+<div class="metric-grid">
+  <div class="metric-card"><div class="metric-value">{{ latency.get('p50_latency_ms', '—') }}<span style="font-size:13px;font-weight:400;color:var(--text-muted)">ms</span></div><div class="metric-label">p50</div></div>
+  <div class="metric-card"><div class="metric-value">{{ latency.get('p95_latency_ms', '—') }}<span style="font-size:13px;font-weight:400;color:var(--text-muted)">ms</span></div><div class="metric-label">p95</div></div>
+  <div class="metric-card"><div class="metric-value">{{ latency.get('p99_latency_ms', '—') }}<span style="font-size:13px;font-weight:400;color:var(--text-muted)">ms</span></div><div class="metric-label">p99</div></div>
+  <div class="metric-card"><div class="metric-value">{{ latency.get('request_count', '—') }}</div><div class="metric-label">Requests</div></div>
+</div>
+{% endif %}
+
+<!-- Batch scoring distribution -->
+{% if pred_dist %}
+<div class="section-title">Batch Scoring — Class Distribution</div>
+<div class="card">
+  {% set first = pred_dist[0] %}
+  {% set run_ts = first.get('timestamp', '') %}
+  {% set run_label = first.get('label', '') %}
+  <p class="muted" style="margin-bottom:14px;font-size:12px;">
+    Latest batch scoring run
+    {% if run_ts %}&mdash; <strong>{{ run_ts[:16] | replace("T", " ") }}</strong>{% endif %}
+    {% if run_label %}&nbsp;(<code>{{ run_label }}</code>){% endif %}
+  </p>
+  {% set colorMap = {'Poor': 'badge-red', 'Standard': 'badge-amber', 'Good': 'badge-green'} %}
+  {% for row in pred_dist %}
+    {% set cls = row.get('credit_class') or row.get('class') or row.get('predicted_label', '') %}
+    {% set pct = row.get('percentage', row.get('pct', row.get('fraction', 0)))|float %}
+    {% set cnt = row.get('count') %}
+    {% set bar_w = [pct if pct > 1 else pct * 100, 100]|min|round(1) %}
+    <div class="prob-row">
+      <span class="prob-label">{{ cls }}</span>
+      <div class="prob-bar-wrap"><div class="prob-bar {{ colorMap.get(cls|string, '') }}" style="width:{{ bar_w }}%"></div></div>
+      <span class="prob-value">
+        {{ "%.1f"|format(pct if pct > 1 else pct * 100) }}%
+        {% if cnt is not none %}<span class="muted" style="font-size:11px;">&nbsp;({{ "{:,}".format(cnt|int) }})</span>{% endif %}
+      </span>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Per-class F1 + KS -->
+{% if eval and eval.get('f1_per_class') %}
+<div class="section-title">Per-Class Metrics</div>
+<div class="card">
+  <table class="data-table">
+    <thead><tr><th>Class</th><th>F1</th><th>KS Statistic</th></tr></thead>
+    <tbody>
+      {% for cls, f1v in eval.f1_per_class.items() %}
+      <tr>
+        <td><span class="badge {{ {'Poor':'badge-red','Standard':'badge-amber','Good':'badge-green'}.get(cls, 'badge-grey') }}">{{ cls }}</span></td>
+        <td>{{ "%.4f"|format(f1v) }}</td>
+        <td>{{ "%.4f"|format(eval.get('ks_per_class', {}).get(cls, 0)) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ══ SECTION 2: DRIFT & MODEL RANKING ════════════���═════════════════════════ -->
+<div class="monitor-section-divider">
+  <span class="monitor-section-divider-label">Drift &amp; Stability</span>
+  <div class="monitor-section-divider-line"></div>
+</div>
+
+<!-- Feature drift -->
+<div class="section-title">Feature Drift (PSI)</div>
+{% if drift %}
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr><th>Feature</th><th>PSI</th><th>Status</th><th>Window</th></tr>
+    </thead>
+    <tbody>
+      {% for row in drift %}
+      {% set psi = row.get('psi', 0)|float %}
+      {% set status = row.get('status', '') %}
+      <tr>
+        <td>{{ row.get('feature', row.get('column', '')) }}</td>
+        <td>{{ "%.4f"|format(psi) }}</td>
+        <td>
+          {% if status == 'drift' or psi > 0.2 %}
+            <span class="badge badge-red">Drift</span>
+          {% elif status == 'warning' or psi > 0.1 %}
+            <span class="badge badge-amber">Warning</span>
+          {% else %}
+            <span class="badge badge-green">Stable</span>
+          {% endif %}
+        </td>
+        <td>{{ row.get('monitoring_window', '—') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <span class="empty-state-icon">◈</span>
+    <p>No drift data yet.</p>
+    <p class="muted">Run the scoring pipeline to generate PSI reports.</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Model ranking -->
+<div class="section-title">Model Ranking</div>
+{% if ranking %}
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr><th>Rank</th><th>Model</th><th>F1 Macro</th><th>Accuracy</th><th>AUC</th></tr>
+    </thead>
+    <tbody>
+      {% for row in ranking %}
+      <tr {% if loop.first %}class="row-highlight"{% endif %}>
+        <td>{{ row.get('rank', loop.index) }}</td>
+        <td>{{ model_display.get(row.get('model_name', ''), row.get('model_name', '—')) }}</td>
+        <td>{{ "%.4f"|format(row.get('f1_macro', 0)|float) }}</td>
+        <td>{{ "%.4f"|format(row.get('accuracy', 0)|float) }}</td>
+        <td>{{ "%.4f"|format(row.get('auc_ovr', 0)|float) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <span class="empty-state-icon">◈</span>
+    <p>No model ranking data yet.</p>
+    <p class="muted">Run the training pipeline to generate rankings.</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ SECTION 3: FAIRNESS ════════════════════════════════════════════════════ -->
+<div class="monitor-section-divider">
+  <span class="monitor-section-divider-label">Fairness</span>
+  <div class="monitor-section-divider-line"></div>
+</div>
+
+<div class="section-title">Fairness by Occupation</div>
+{% if fairness and fairness | length > 0 %}
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr>{% for key in fairness[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in fairness %}
+      <tr>{% for val in row.values() %}<td>{{ val if val is not none else '—' }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <span class="empty-state-icon">◈</span>
+    <p>No fairness data yet.</p>
+    <p class="muted">Run the training pipeline to generate fairness reports.</p>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

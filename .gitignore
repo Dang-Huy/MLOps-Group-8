@@ -24,12 +24,12 @@ artifacts/models/*.h5
 !artifacts/models/.gitkeep
 
 # Data (raw)
-data/raw/*.csv
-data/raw/*.parquet
-!data/raw/.gitkeep
-data/interim/
-data/processed/
-!data/processed/.gitkeep
+# data/raw/*.csv
+# data/raw/*.parquet
+# !data/raw/.gitkeep
+# data/interim/
+# data/processed/
+# !data/processed/.gitkeep
 
 # Logs
 logs/
@@ -60,3 +60,4 @@ htmlcov/
 # MLflow
 mlruns/
 mlartifacts/
+.temp

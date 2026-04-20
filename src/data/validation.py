@@ -106,12 +106,12 @@ def validate_raw(df: pd.DataFrame, split: str = "train") -> dict:
     }
 
     # ---- Print summary ---------------------------------------------------
-    status = "✅ PASSED" if passed else "❌ FAILED"
-    print(f"[validation] {split} — {status}")
+    status = "PASSED" if passed else "FAILED"
+    print(f"[validation] {split} -- {status}")
     for w in warnings:
-        print(f"  ⚠️  {w}")
+        print(f"  [WARN] {w}")
     for e in errors:
-        print(f"  ❌ {e}")
+        print(f"  [ERROR] {e}")
 
     if not passed:
         raise ValueError(
