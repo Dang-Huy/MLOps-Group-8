@@ -22,7 +22,7 @@ spec:
       containers:
         - name: api
           image: ruoc188/mlops-group8:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: http

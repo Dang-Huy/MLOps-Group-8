@@ -149,78 +149,141 @@ Panels: total predictions, error rate, request rate, p50/p95/p99 latency, class 
 
 ## Kubernetes Deployment
 
-First-run flow for a new contributor who pulls the API image from Docker Hub and validates via `kubectl port-forward`.
+Run this flow when you already have the API image in local Docker and do not want to pull from Docker Hub.
 
-Prerequisites:
+### Prerequisites
 
+- kubectl is installed and can connect to your cluster (`kubectl cluster-info`).
 - Kubernetes is enabled (for example Docker Desktop Kubernetes).
-- Docker image is available on Docker Hub (manifest currently uses `ruoc188/mlops-group8:latest`).
-- MLflow is reachable from the API Pod at `http://host.docker.internal:5000` (configured in `deployment/k8s/configmap.yaml`).
+- The image already exists locally (example: ruoc188/mlops-group8:latest).
+- The Deployment should use local image behavior:
+  - imagePullPolicy: IfNotPresent (or Never) in deployment/k8s/api-deployment.yaml.
+- MLflow is reachable from inside the cluster at the URI in deployment/k8s/configmap.yaml.
+
+### Step 0: Verify local image exists
 
 ```bash
-docker pull ruoc188/mlops-group8:latest
+docker image inspect ruoc188/mlops-group8:latest
 ```
 
-Pulls the API image to your local Docker cache so Kubernetes can start Pods faster.
+Checks whether the API image is already in your local Docker cache. If no result appears, build it first:
+
+```bash
+docker build -t ruoc188/mlops-group8:latest .
+```
+
+Builds the image locally from this repository so Kubernetes can use it without pulling from a registry.
+
+If your cluster is **Docker Desktop Kubernetes**, the local Docker image is usually visible directly.
+If your cluster is **kind** or **minikube**, load the image into the cluster explicitly:
+
+```bash
+# kind
+kind load docker-image ruoc188/mlops-group8:latest
+
+# minikube
+minikube image load ruoc188/mlops-group8:latest
+```
+
+### Step 1: Create namespace
 
 ```bash
 kubectl apply -f deployment/k8s/namespace.yaml
 ```
 
-Creates the `credit-score` namespace used by all project resources.
+Creates the credit-score namespace to isolate all project resources.
+
+### Step 2: Create runtime config
 
 ```bash
 kubectl apply -f deployment/k8s/configmap.yaml
 ```
 
-Creates environment configuration for the API container (MLflow URI, model name, experiment ID).
+Creates ConfigMap values injected into the API container, including MLflow tracking URI and model name.
+
+### Step 3: (Optional) Create persistent volume claim
+
+```bash
+kubectl apply -f deployment/k8s/pvc.yaml
+```
+
+Creates a persistent volume claim for artifacts. Keep this step if your Pod mounts artifacts through PVC.
+
+### Step 4: Deploy API
 
 ```bash
 kubectl apply -f deployment/k8s/api-deployment.yaml
 ```
 
-Creates the API Deployment (1 replica, container image, probes, CPU/memory limits).
+Creates or updates the API Deployment, including replicas, probes, resources, and image settings.
+
+### Step 5: Expose API inside cluster
 
 ```bash
 kubectl apply -f deployment/k8s/api-service.yaml
 ```
 
-Creates a `ClusterIP` Service so traffic can be forwarded to the API Pod inside the cluster.
+Creates a ClusterIP Service that provides stable in-cluster networking for the API Pods.
+
+### Step 6: (Optional) Enable autoscaling
+
+```bash
+kubectl apply -f deployment/k8s/hpa.yaml
+```
+
+Creates HorizontalPodAutoscaler for CPU and memory based scaling. Requires metrics-server in the cluster.
+
+### Step 7: Wait for rollout completion
 
 ```bash
 kubectl -n credit-score rollout status deploy/credit-score-api --timeout=180s
 ```
 
-Waits until the Deployment finishes rolling out and the Pod becomes Ready.
+Waits until new Pods are Ready and the Deployment rollout is complete.
+
+### Step 8: Check current resources
 
 ```bash
-kubectl -n credit-score get pods,svc
+kubectl -n credit-score get pods,svc,hpa,pvc
 ```
 
-Shows current Pod and Service status in the `credit-score` namespace.
+Shows runtime state of Pods, Service, autoscaler, and storage claim in one command.
+
+### Step 9: Inspect logs when needed
 
 ```bash
 kubectl -n credit-score logs deploy/credit-score-api --tail=200
 ```
 
-Prints recent API logs to diagnose startup or model-loading issues.
+Prints recent API logs for startup and model loading troubleshooting.
+
+### Step 10: Open API locally via port-forward
 
 ```bash
 kubectl -n credit-score port-forward svc/credit-score-api 8000:80
 ```
 
-Forwards local port `8000` to the in-cluster Service so you can call the API from your machine.
+Forwards local port 8000 to the in-cluster Service so you can open API/UI from your machine.
 
 After port-forward is running, open:
 
 - API docs: <http://127.0.0.1:8000/docs>
+- Web UI: <http://127.0.0.1:8000/ui/>
 - Health: <http://127.0.0.1:8000/health>
 - Model metadata: <http://127.0.0.1:8000/model-info>
 
-Optional for later stages:
+### Cleanup (optional)
 
-- `deployment/k8s/pvc.yaml`: enable only when you want external artifact storage mounted into the Pod.
-- `deployment/k8s/hpa.yaml`: enable when your cluster has metrics-server and you want autoscaling.
+```bash
+kubectl delete -f deployment/k8s/hpa.yaml --ignore-not-found
+kubectl delete -f deployment/k8s/api-service.yaml
+kubectl delete -f deployment/k8s/api-deployment.yaml
+kubectl delete -f deployment/k8s/pvc.yaml --ignore-not-found
+kubectl delete -f deployment/k8s/configmap.yaml
+kubectl delete -f deployment/k8s/namespace.yaml
+```
+
+Removes all deployed Kubernetes resources in reverse order.
 
 Optional monitoring stack:
 
@@ -248,14 +311,106 @@ Installs Prometheus + Grafana into the `monitoring` namespace using this project
 
 ## CI/CD
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push:
+GitHub Actions workflow at `.github/workflows/ci.yml` is triggered by:
 
-1. **Lint** — `ruff check src/ tests/`
-2. **Unit tests** — `pytest tests/unit/`
-3. **Integration + contract tests** — run with `continue-on-error`
-4. **Docker build** — validates the `Dockerfile` builds cleanly
+- Push to `main` and `develop`
+- Pull request targeting `main`
 
-To enable Docker push to GHCR, uncomment the `docker-push` job and set repository secrets.
+### Pipeline Stages
+
+1.**lint-and-test**
+
+- Sets up Python 3.11 and installs `requirements-dev.txt`
+  - Runs Ruff lint on `src/` and `tests/`
+  - Runs unit tests (blocking)
+  - Runs integration and contract tests as non-blocking checks (`continue-on-error: true`)
+
+2.**training** (depends on `lint-and-test`)
+
+- Starts a local MLflow server in CI (`127.0.0.1:5000`)
+  - Waits until MLflow is ready before training
+  - Runs `python -m src.pipelines.training_pipeline`
+  - Verifies required training outputs exist
+  - Uploads artifacts bundle (`artifacts/models`, `artifacts/reports`, drift reports, predictions)
+  - Uploads MLflow debug logs if the job fails
+
+3.**docker-build** (depends on `training`)
+
+- Downloads the uploaded training artifacts
+  - Builds runtime Docker image with Buildx (no push)
+  - Uses GitHub Actions cache for faster builds
+
+4.**docker-push** (depends on `docker-build`, only on branch `main`)
+
+- Logs in to Docker Hub using repository secrets
+  - Builds and pushes runtime image tags:
+    - `${{ secrets.DOCKERHUB_USERNAME }}/mlops-group8:latest`
+    - `${{ secrets.DOCKERHUB_USERNAME }}/mlops-group8:${{ github.sha }}`
+
+Required repository secrets for push job:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+### CI/CD DAG
+
+```mermaid
+flowchart LR
+    %% --- ĐỊNH NGHĨA MÀU SẮC (STYLES) ---
+    classDef trigger fill:#eceff1,stroke:#607d8b,stroke-width:2px,color:#263238;
+    classDef test fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;
+    classDef train fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100;
+    classDef docker fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;
+    classDef condition fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    classDef skip fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px,stroke-dasharray: 5 5,color:#757575;
+
+    %% --- NODE KÍCH HOẠT ---
+    A["⚡ <b>Trigger</b><br/>Push/PR"]:::trigger
+
+    %% --- KHAI BÁO CÁC NHÓM (SUBGRAPHS) ---
+    subgraph Stage1 [Stage: Code Quality]
+        B["🧪 <b>lint-and-test</b>"]:::test
+        B1["🧩 Integration tests<br/>(non-blocking)"]:::test
+        B2["🤝 Contract tests<br/>(non-blocking)"]:::test
+    end
+
+    subgraph Stage2 [Stage: ML Pipeline]
+        C["🤖 <b>training</b><br/>(MLflow)"]:::train
+        C1["📦 Upload<br/>training-artifacts"]:::train
+        C2["🐞 Upload<br/>mlflow-debug-logs"]:::train
+    end
+
+    subgraph Stage3 [Stage: Containerization]
+        D["🐳 <b>docker-build</b>"]:::docker
+        E{"🔀 Branch<br/>is main?"}:::condition
+        F["☁️ <b>docker-push</b><br/>(Docker Hub)"]:::docker
+        G["🚫 <b>Skip push</b>"]:::skip
+    end
+
+    %% --- 1. LUỒNG CHÍNH (Khai báo trước để ưu tiên đường thẳng ngang) ---
+    A ==> B ==> C ==> D ==> E
+    
+    %% Rẽ nhánh đẩy image
+    E ==>|Yes| F
+    E -.->|No| G
+
+    %% --- 2. LUỒNG PHỤ (Sẽ tự động rẽ nhánh từ trên xuống dọc theo luồng chính) ---
+    B -.-> B1
+    B -.-> B2
+    
+    C ==>|Always| C1
+    C -.->|On failure| C2
+
+    %% --- TÙY CHỈNH VIỀN SUBGRAPH ---
+    style Stage1 fill:none,stroke:#01579b,stroke-width:1px,stroke-dasharray: 5 5
+    style Stage2 fill:none,stroke:#e65100,stroke-width:1px,stroke-dasharray: 5 5
+    style Stage3 fill:none,stroke:#4a148c,stroke-width:1px,stroke-dasharray: 5 5
+```
+
+Notes:
+
+- PRs to `main` run validation, training, and Docker build checks, but do not push images.
+- Image publishing is automatic only for successful workflows on `main`.
 
 ---
 
