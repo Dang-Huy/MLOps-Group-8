@@ -512,7 +512,7 @@ def run_hpo_pipeline(
 
     elapsed_total = time.time() - t_total
     logger.info(f"\n== HPO COMPLETE in {elapsed_total:.1f}s ==")
-    logger.info(f"   Run training_pipeline.py to use these params for the full training run.")
+    logger.info("   Run training_pipeline.py to use these params for the full training run.")
 
     return best_params
 

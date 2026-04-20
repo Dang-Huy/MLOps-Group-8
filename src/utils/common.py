@@ -1,7 +1,7 @@
 """src/utils/common.py -- shared utility functions."""
 import time
 import functools
-from typing import Callable, Any
+from typing import Callable
 import numpy as np
 import pandas as pd
 

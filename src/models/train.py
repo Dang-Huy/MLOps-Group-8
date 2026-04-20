@@ -12,8 +12,6 @@ import json
 import time
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 from xgboost import XGBClassifier
 from sklearn.utils.class_weight import compute_sample_weight
 

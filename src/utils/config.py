@@ -1,5 +1,4 @@
 """src/utils/config.py -- load and merge YAML config files with env overrides."""
-import os
 from pathlib import Path
 from typing import Any
 import yaml

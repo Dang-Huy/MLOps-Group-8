@@ -24,7 +24,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from src.data.schema import (
-    PII_COLUMNS, DIRTY_CATEGORICAL, AGE_RANGE,
+    PII_COLUMNS, AGE_RANGE,
     TARGET_COL, TARGET_ENCODING,
 )
 

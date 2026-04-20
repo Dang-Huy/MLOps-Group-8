@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import pandas as pd
-import numpy as np
 
 from src.models.serialize import load_bundle
 from src.serving.decision_policy import apply_batch_decisions

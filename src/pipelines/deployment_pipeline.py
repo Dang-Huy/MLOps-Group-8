@@ -14,7 +14,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.pipelines.validation_pipeline import run_validation_pipeline
-from src.models.registry import promote_to_production
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
