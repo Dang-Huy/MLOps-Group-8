@@ -158,10 +158,15 @@ def parse_credit_history_age(df: pd.DataFrame) -> pd.DataFrame:
 def clean_categorical_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Replace known garbage placeholders with NaN for later imputation."""
     df = df.copy()
-    df["Occupation"]              = df["Occupation"].replace("_______", np.nan)
-    df["Credit_Mix"]              = df["Credit_Mix"].replace("_", np.nan)
-    df["Payment_Behaviour"]       = df["Payment_Behaviour"].replace("!@9#%8", np.nan)
-    df["Payment_of_Min_Amount"]   = df["Payment_of_Min_Amount"].replace("NM", np.nan)
+    replacements = {
+        "Occupation": "_______",
+        "Credit_Mix": "_",
+        "Payment_Behaviour": "!@9#%8",
+        "Payment_of_Min_Amount": "NM",
+    }
+    for col, bad_value in replacements.items():
+        if col in df.columns:
+            df[col] = df[col].replace(bad_value, np.nan)
     return df
 
 
