@@ -53,7 +53,7 @@
 
 #     env:
 #       MLFLOW_ENABLED: "true"
-#       MLFLOW_TRACKING_URI: http://localhost:5000
+#       MLFLOW_TRACKING_URI: http://mlflow:5000
 #       MLFLOW_MODEL_NAME: credit_score_serving
 #       MLFLOW_MODEL_ALIAS: production
 #       MLFLOW_EXPERIMENT_NAME: credit-score-v1

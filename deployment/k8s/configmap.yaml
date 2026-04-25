@@ -4,6 +4,7 @@ metadata:
   name: credit-score-config
   namespace: credit-score
 data:
-  mlflow_tracking_uri: "http://mlflow:5000"
+  mlflow_tracking_uri: "http://mlflow-service:5000"
   mlflow_model_name: "credit_score_serving"
-  mlflow_experiment_id: "194323661774503133"
+  MLFLOW_MODEL_ALIAS: "production"
+  MLFLOW_EXPERIMENT_NAME: "credit-score-v1"

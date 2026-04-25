@@ -1,6 +1,7 @@
 """Resolve production model with strict MLflow-first priority."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 
 SourceResolvedFrom = Literal[
     "mlflow_alias_production",
-    "mlflow_stage_production",
+    # "mlflow_stage_production",
     "json_fallback",
 ]
 
@@ -51,9 +52,9 @@ def resolve_model(config: AppConfig | None = None) -> ResolvedModelMetadata:
         if alias_result is not None:
             return alias_result
 
-        stage_result = _resolve_from_mlflow_stage(client, cfg, warnings, errors)
-        if stage_result is not None:
-            return stage_result
+        # stage_result = _resolve_from_mlflow_stage(client, cfg, warnings, errors)
+        # if stage_result is not None:
+        #     return stage_result
 
     return _resolve_from_json_fallback(cfg, warnings, errors)
 
@@ -117,64 +118,64 @@ def _resolve_from_mlflow_alias(
         return None
 
 
-def _resolve_from_mlflow_stage(
-    client: Any,
-    cfg: AppConfig,
-    warnings: list[str],
-    errors: list[str],
-) -> ResolvedModelMetadata | None:
-    logger.info("Resolving model by MLflow stage 'Production' for '%s'.", cfg.mlflow_model_name)
-    model_versions: list[Any] = []
+# def _resolve_from_mlflow_stage(
+#     client: Any,
+#     cfg: AppConfig,
+#     warnings: list[str],
+#     errors: list[str],
+# ) -> ResolvedModelMetadata | None:
+#     logger.info("Resolving model by MLflow stage '.%s' for '%s'.", cfg.mlflow_model_stage, cfg.mlflow_model_name)
+#     model_versions: list[Any] = []
 
-    try:
-        model_versions = list(client.get_latest_versions(cfg.mlflow_model_name, stages=["Production"]))
-    except Exception as exc:
-        msg = f"Failed to query MLflow latest Production version: {exc}"
-        logger.warning(msg)
-        warnings.append(msg)
-        errors.append(msg)
+#     try:
+#         model_versions = list(client.get_latest_versions(cfg.mlflow_model_name, stages=[cfg.mlflow_model_stage]))
+#     except Exception as exc:
+#         msg = f"Failed to query MLflow latest {cfg.mlflow_model_stage} version: {exc}"
+#         logger.warning(msg)
+#         warnings.append(msg)
+#         errors.append(msg)
 
-    if not model_versions:
-        try:
-            versions = client.search_model_versions(f"name='{cfg.mlflow_model_name}'")
-            model_versions = [mv for mv in versions if str(getattr(mv, "current_stage", "")).lower() == "production"]
-        except Exception as exc:
-            msg = f"Could not search model versions in MLflow: {exc}"
-            logger.warning(msg)
-            warnings.append(msg)
-            errors.append(msg)
-            return None
+#     if not model_versions:
+#         try:
+#             versions = client.search_model_versions(f"name='{cfg.mlflow_model_name}'")
+#             model_versions = [mv for mv in versions if str(getattr(mv, "current_stage", "")).lower() == cfg.mlflow_model_stage.lower()]
+#         except Exception as exc:
+#             msg = f"Could not search model versions in MLflow: {exc}"
+#             logger.warning(msg)
+#             warnings.append(msg)
+#             errors.append(msg)
+#             return None
 
-    if not model_versions:
-        msg = f"No Production stage model version found in MLflow for '{cfg.mlflow_model_name}'."
-        logger.warning(msg)
-        warnings.append(msg)
-        errors.append(msg)
-        return None
+#     if not model_versions:
+#         msg = f"No {cfg.mlflow_model_stage} stage model version found in MLflow for '{cfg.mlflow_model_name}'."
+#         logger.warning(msg)
+#         warnings.append(msg)
+#         errors.append(msg)
+#         return None
 
-    sorted_versions = sorted(
-        model_versions,
-        key=lambda mv: int(str(getattr(mv, "version", "0")) or "0"),
-        reverse=True,
-    )
+#     sorted_versions = sorted(
+#         model_versions,
+#         key=lambda mv: int(str(getattr(mv, "version", "0")) or "0"),
+#         reverse=True,
+#     )
 
-    for mv in sorted_versions:
-        try:
-            return _build_mlflow_result(
-                client=client,
-                cfg=cfg,
-                model_version=mv,
-                source_resolved_from="mlflow_stage_production",
-                alias_or_stage="stage:Production",
-                warnings=warnings,
-            )
-        except Exception as exc:
-            msg = f"Production stage version metadata missing or not parseable: {exc}"
-            logger.warning(msg)
-            warnings.append(msg)
-            errors.append(msg)
+#     for mv in sorted_versions:
+#         try:
+#             return _build_mlflow_result(
+#                 client=client,
+#                 cfg=cfg,
+#                 model_version=mv,
+#                 source_resolved_from="mlflow_stage_production",
+#                 alias_or_stage=f"stage:{cfg.mlflow_model_stage}",
+#                 warnings=warnings,
+#             )
+#         except Exception as exc:
+#             msg = f"{cfg.mlflow_model_stage} stage version metadata missing or not parseable: {exc}"
+#             logger.warning(msg)
+#             warnings.append(msg)
+#             errors.append(msg)
 
-    return None
+#     return None
 
 
 def _build_mlflow_result(
@@ -428,14 +429,37 @@ def _load_json_registry_entry(registry_path: Path) -> dict[str, Any]:
 
 
 def _source_to_path(source: str) -> Path:
+    """
+    Resolve MLflow source URI to local path.
+    Handles Windows paths from local training by mapping to Docker mount.
+    """
     parsed = urlparse(source)
+    
     if parsed.scheme == "file":
         unquoted = unquote(parsed.path)
         if re.match(r"^/[A-Za-z]:/", unquoted):
-            unquoted = unquoted[1:]
+            unquoted = unquoted[1:]  # /D:/code/... → D:/code/...
+        
+        # Extract run_id từ Windows path (D:/code/.../mlruns/RUN_ID/artifacts/...)
+        match = re.search(r'mlruns[/\\]([a-f0-9]+)[/\\]artifacts', unquoted)
+        if match:
+            run_id = match.group(1)
+            # Extract artifact subpath (everything after RUN_ID/artifacts/)
+            parts = re.split(r'mlruns[/\\]' + run_id + r'[/\\]artifacts[/\\]?', unquoted)
+            subpath = parts[-1] if len(parts) > 1 else ""
+            
+            # Use Docker mounted volume instead of Windows path
+            container_path = f"/mlflow/artifacts/{run_id}/artifacts"
+            if subpath:
+                container_path = f"{container_path}/{subpath}"
+            return Path(container_path)
+        
+        # If not an mlruns path, return as-is
         return Path(unquoted)
+    
     if parsed.scheme in {"", None}:
         return Path(source)
+    
     raise ModelResolutionError(
         f"Unsupported MLflow source URI scheme '{parsed.scheme}' for source '{source}'."
     )

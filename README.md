@@ -11,7 +11,7 @@ Multiclass credit score classifier (Poor / Standard / Good) with a full MLOps st
 pip install -r requirements.txt
 
 # 2. Set up MLflow for experiment tracking and model registry (must be running before training)
-mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db
+mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///.temp/mlflow_db/mlflow.db --default-artifact-root .temp/mlruns
 
 # 2. Train the model (generates artifacts/ and data/processed/)
 python -m src.pipelines.training_pipeline

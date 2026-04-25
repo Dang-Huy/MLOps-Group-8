@@ -12,7 +12,7 @@ services:
       - "8000:8000"
     environment:
       # MLflow resolution: point to the mlflow service inside compose
-      MLFLOW_TRACKING_URI: "http://localhost:5000"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
       MLFLOW_MODEL_NAME: "credit_score_serving"
       MLFLOW_MODEL_ALIAS: "production"
       MLFLOW_EXPERIMENT_NAME: "credit-score-v1"
@@ -44,7 +44,8 @@ services:
       - "5000:5000"
     volumes:
       - ./.temp/mlruns:/mlflow/artifacts
-      - mlflow_db:/mlflow/db
+      # - ./mlflow.db:/mlflow/db/mlflow.db
+      - ./.temp/mlflow_db:/mlflow/db
     command: >
       mlflow server
         --host 0.0.0.0
@@ -98,7 +99,6 @@ services:
 volumes:
   prometheus_data:
   grafana_data:
-  mlflow_db:
 
 networks:
   credit-score-net:
