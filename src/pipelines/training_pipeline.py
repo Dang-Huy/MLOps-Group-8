@@ -758,7 +758,7 @@ def run_training_pipeline() -> ModelBundle:
     # ── 4. PREPROCESS ─────────────────────────────────────────────────────────
     logger.info("\n== 4. PREPROCESS ======================================")
     from src.data.preprocessing import encode_target
-    train_clean, valid_clean, test_clean = preprocess(train_raw, valid_raw, test_raw)
+    train_clean, valid_clean, test_clean, _ = preprocess(train_raw, valid_raw, test_raw)
     annual_income_cap = float(train_clean["Annual_Income"].max())
     # All three splits come from labelled train_raw, so encode target for test too
     test_clean = encode_target(test_clean)
