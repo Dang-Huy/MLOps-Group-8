@@ -72,10 +72,6 @@ def _default_model_name(repo_root: Path) -> str:
         return "lightgbm_serving"
     if _has_alias(models_dir, "lightgbm", "production"):
         return "lightgbm"
-    if _has_production_stage(models_dir, "lightgbm_serving"):
-        return "lightgbm_serving"
-    if _has_production_stage(models_dir, "lightgbm"):
-        return "lightgbm"
     if (models_dir / "lightgbm_serving").exists():
         return "lightgbm_serving"
     if (models_dir / "lightgbm").exists():
@@ -107,7 +103,7 @@ def load_config() -> AppConfig:
     except ImportError:
         pass
 
-    tracking_uri = _normalize_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"), repo_root)
+    tracking_uri = _normalize_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"), repo_root)
     model_name = os.getenv("MLFLOW_MODEL_NAME", _default_model_name(repo_root))
     model_alias = os.getenv("MLFLOW_MODEL_ALIAS", "production")
     fallback_path = _resolve_optional_path(os.getenv("MODEL_PATH_FALLBACK"), repo_root)

@@ -4,66 +4,177 @@ Operational guide for the Credit Score MLOps system.
 
 ---
 
-## Local Development
+## End-to-End Run Order
 
-### Start the API
+Follow this sequence when setting up and running the project from scratch.
+
+### Step 0: Tool list and environment checks
+
+Required tools:
+
+- Python 3.11
+- pip
+- Docker + Docker Compose
+- kubectl (required for Kubernetes flow)
+- Helm (optional, only for monitoring stack)
+
+Check versions:
 
 ```bash
-# Install dependencies
+python --version
+pip --version
+docker --version
+docker compose version
+kubectl version --client
+helm version
+```
+
+Why: confirms core tooling is available before running pipelines or containers.
+
+### Step 1: Install dependencies
+
+```bash
+# Runtime dependencies
 pip install -r requirements.txt
 
-# Start with auto-reload
+# Dev/test dependencies (recommended for full workflow)
+pip install -r requirements-dev.txt
+```
+
+Why: installs packages for training, serving, testing, and CI parity.
+
+### Step 2: Set up MLflow
+
+Start MLflow locally before training:
+
+```bash
+mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db
+```
+
+Why: training and model registration need a running MLflow tracking server.
+
+Verify MLflow is reachable:
+
+```bash
+curl http://127.0.0.1:5000/
+```
+
+### Step 3: Run training pipeline
+
+Run full training pipeline:
+
+```bash
+python -m src.pipelines.training_pipeline
+```
+
+Why: executes HPO -> ensemble -> evaluation -> model selection -> bundle export.
+
+Expected artifacts:
+
+- artifacts/models/final_model_bundle.pkl
+- artifacts/reports/final_model_comparison.csv
+- artifacts/reports/final_model_selection.json
+- artifacts/drift_reports/
+
+### Step 3.1: Hyperparameter tuning only (optional)
+
+```bash
+python -m src.pipelines.hyperparameter_tuning_pipeline \
+        --trials 100 --timeout 3600 --models lightgbm xgboost
+```
+
+Why: runs search only, useful when you want to tune without full retraining/export.
+
+### Step 3.2: Scoring pipeline (optional)
+
+```bash
+python -m src.pipelines.scoring_pipeline
+python -m src.pipelines.scoring_pipeline --input path/to/new_data.csv --no-drift
+```
+
+Why: generates batch predictions and optional drift reports.
+
+### Step 3.3: Retraining pipeline (optional)
+
+```bash
+python -m src.pipelines.retraining_pipeline
+python -m src.pipelines.retraining_pipeline --force
+python -m src.pipelines.retraining_pipeline --new-data path/to/new_data.csv
+```
+
+Why: supports drift-gated retraining or force retraining with new data input.
+
+### Step 4: Run API and web UI locally
+
+```bash
 uvicorn deployment.fastapi.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Web UI: http://localhost:8000/ui/  
-Swagger: http://localhost:8000/docs  
-Health: http://localhost:8000/health
+Why: starts FastAPI service and web pages for inference + monitoring views.
 
-### Run Tests
+Open and test:
+
+- Web UI: <http://localhost:8000/ui/>
+- Swagger UI: <http://localhost:8000/docs>
+- Health: <http://localhost:8000/health>
+- Model metadata: <http://localhost:8000/model-info>
+
+Quick API check:
 
 ```bash
-# Install dev deps first
-pip install -r requirements-dev.txt
-
-pytest tests/ -v --tb=short
-pytest tests/unit/          # fast, no external deps
-pytest tests/integration/   # needs model bundle in artifacts/
-pytest tests/contract/      # needs running server on :8000
+curl -X POST http://localhost:8000/predict \
+    -H "Content-Type: application/json" \
+    -d '{
+        "Age": 34,
+        "Annual_Income": 78000,
+        "Monthly_Inhand_Salary": 5200,
+        "Num_Bank_Accounts": 4,
+        "Num_Credit_Card": 3,
+        "Interest_Rate": 12,
+        "Outstanding_Debt": 1200,
+        "Credit_Mix": "Good",
+        "Payment_of_Min_Amount": "Yes"
+    }'
 ```
 
----
+### Step 5: Run with Docker Compose
 
-## Docker Compose
-
-### Start All Services
+First run (build everything):
 
 ```bash
-# First run — builds the API image
 docker compose up --build
+```
 
-# Subsequent runs
+Subsequent runs:
+
+```bash
 docker compose up -d
+```
 
-# View logs
+Why: first run builds API image; later runs reuse existing image/layers for faster startup.
+
+View logs:
+
+```bash
 docker compose logs -f api
 docker compose logs -f mlflow
 ```
 
-**Ports:**
-- API: http://localhost:8000
-- MLflow: http://localhost:5000
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (default: admin / admin)
+Ports:
 
-### Stop
+- API + Web UI: <http://localhost:8000>
+- MLflow UI: <http://localhost:5000>
+- Prometheus: <http://localhost:9090>
+- Grafana: <http://localhost:3000> (default: admin / admin)
+
+Stop services:
 
 ```bash
-docker compose down          # stop and remove containers
-docker compose down -v       # also remove named volumes (data loss!)
+docker compose down
+docker compose down -v
 ```
 
-### Set Grafana Password
+Set Grafana password:
 
 ```bash
 cp .env.example .env
@@ -73,36 +184,130 @@ docker compose up -d grafana
 
 ---
 
-## Model Training
+## Kubernetes Deployment (Same Flow as README)
 
-### Full Retraining
+Use this flow when you already have the API image in local Docker and do not want to pull from Docker Hub.
+
+Prerequisites:
+
+- kubectl is installed and connected (`kubectl cluster-info`)
+- Kubernetes is enabled (for example Docker Desktop Kubernetes)
+- Local image exists (example: ruoc188/mlops-group8:latest)
+- deployment/k8s/api-deployment.yaml uses imagePullPolicy IfNotPresent (or Never)
+
+Step-by-step:
 
 ```bash
-python -m src.pipelines.training_pipeline
+# 0) Verify local image exists
+docker image inspect ruoc188/mlops-group8:latest
+
+# If missing, build locally
+docker build -t ruoc188/mlops-group8:latest .
+
+# If using kind
+kind load docker-image ruoc188/mlops-group8:latest
+
+# If using minikube
+minikube image load ruoc188/mlops-group8:latest
+
+# 1) Create namespace
+kubectl apply -f deployment/k8s/namespace.yaml
+
+# 2) Apply runtime config
+kubectl apply -f deployment/k8s/configmap.yaml
+
+# 3) Optional storage claim
+kubectl apply -f deployment/k8s/pvc.yaml
+
+# 4) Deploy API
+kubectl apply -f deployment/k8s/api-deployment.yaml
+
+# 5) Create service
+kubectl apply -f deployment/k8s/api-service.yaml
+
+# 6) Optional autoscaling
+kubectl apply -f deployment/k8s/hpa.yaml
+
+# 7) Wait for ready pods
+kubectl -n credit-score rollout status deploy/credit-score-api --timeout=180s
+
+# 8) Inspect resources
+kubectl -n credit-score get pods,svc,hpa,pvc
+
+# 9) Inspect logs
+kubectl -n credit-score logs deploy/credit-score-api --tail=200
+
+# 10) Forward service to local machine
+kubectl -n credit-score port-forward svc/credit-score-api 8000:80
 ```
 
-This runs HPO → ensemble → evaluation → registry update. Takes 15–30 min.  
-Output: `artifacts/models/final_model_bundle.pkl`, `artifacts/reports/`, `artifacts/drift_reports/`.
+After port-forward is running:
 
-### Hyperparameter Tuning Only
+- <http://127.0.0.1:8000/ui/>
+- <http://127.0.0.1:8000/docs>
+- <http://127.0.0.1:8000/health>
+- <http://127.0.0.1:8000/model-info>
+
+Cleanup:
 
 ```bash
-python -m src.pipelines.hyperparameter_tuning_pipeline \
-    --trials 100 --timeout 3600 --models lightgbm xgboost
+kubectl delete -f deployment/k8s/hpa.yaml --ignore-not-found
+kubectl delete -f deployment/k8s/api-service.yaml
+kubectl delete -f deployment/k8s/api-deployment.yaml
+kubectl delete -f deployment/k8s/pvc.yaml --ignore-not-found
+kubectl delete -f deployment/k8s/configmap.yaml
+kubectl delete -f deployment/k8s/namespace.yaml
 ```
 
-### Batch Scoring
+Optional monitoring stack:
 
 ```bash
-python -m src.pipelines.scoring_pipeline
-python -m src.pipelines.scoring_pipeline --input path/to/data.csv --no-drift
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install monitoring prometheus-community/kube-prometheus-stack \
+    -n monitoring --create-namespace \
+    -f deployment/k8s/helm-values.yaml
 ```
 
-### Drift-Gated Retraining
+---
+
+## CI/CD Summary (Same as README)
+
+Workflow file: .github/workflows/ci.yml
+
+Triggers:
+
+- Push to main and develop
+- Pull request targeting main
+
+Job DAG:
+
+1. lint-and-test
+2. training (needs lint-and-test)
+3. docker-build (needs training)
+4. docker-push (needs docker-build, main branch only)
+
+Mermaid DAG:
+
+```mermaid
+flowchart LR
+        A[Trigger: push main/develop or PR to main] --> B[lint-and-test]
+        B --> C[training]
+        C --> D[docker-build]
+        D --> E{Branch is main?}
+        E -->|Yes| F[docker-push to Docker Hub]
+        E -->|No| G[Skip push]
+```
+
+---
+
+## Run Tests Manually
 
 ```bash
-python -m src.pipelines.retraining_pipeline          # retrain if PSI > threshold
-python -m src.pipelines.retraining_pipeline --force  # force retrain regardless
+pytest tests/ -v --tb=short
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/contract/
 ```
 
 ---

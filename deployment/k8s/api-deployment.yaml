@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
         - name: api
-          image: credit-score-api:latest
-          imagePullPolicy: Always
+          image: ruoc188/mlops-group8:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: http
@@ -38,7 +38,15 @@ spec:
                   name: credit-score-config
                   key: mlflow_model_name
             - name: MLFLOW_MODEL_ALIAS
-              value: "production"
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-score-config
+                  key: MLFLOW_MODEL_ALIAS
+            - name: MLFLOW_EXPERIMENT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: credit-score-config
+                  key: MLFLOW_EXPERIMENT_NAME
           resources:
             requests:
               cpu: "250m"

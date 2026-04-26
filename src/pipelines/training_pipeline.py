@@ -148,15 +148,11 @@ def _get_mlflow_config() -> dict[str, Any]:
     return {
         "enabled": _env_bool("MLFLOW_ENABLED", default=True),
         "tracking_uri": tracking_uri,
-        "artifact_root_uri": artifact_root_path.as_uri(),
+        "artifact_root_uri": ".temp/mlruns", 
         "artifact_root_path": str(artifact_root_path),
         "experiment_name": os.getenv("MLFLOW_EXPERIMENT_NAME", "CreditScoringTraining"),
         "run_name": os.getenv("MLFLOW_RUN_NAME", ""),
     }
-
-
-def _same_uri(left: str, right: str) -> bool:
-    return left.strip().rstrip("/").lower() == right.strip().rstrip("/").lower()
 
 
 def _ensure_experiment_with_artifact_root(
@@ -166,27 +162,24 @@ def _ensure_experiment_with_artifact_root(
 ) -> tuple[str, str]:
     exp = client.get_experiment_by_name(base_name)
     if exp is None:
-        exp_id = client.create_experiment(base_name, artifact_location=artifact_root_uri)
+        artifact_path = Path(artifact_root_uri).expanduser().resolve()
+        artifact_uri = artifact_path.as_uri() if artifact_path.is_absolute() else str(artifact_path)
+        
+        exp_id = client.create_experiment(
+            base_name,
+            artifact_location=artifact_uri,  # ← ALL RUNS sẽ dùng location này
+        )
+        logger.info(
+            f"Created experiment '{base_name}' (id={exp_id}). "
+            f"Artifact location: {artifact_uri}"
+        )
         return base_name, str(exp_id)
 
-    current_location = str(getattr(exp, "artifact_location", "") or "")
-    if _same_uri(current_location, artifact_root_uri):
-        return str(exp.name), str(exp.experiment_id)
-
-    # Existing experiment points elsewhere; use a dedicated sibling experiment.
-    sibling_name = f"{base_name}_temp_mlruns"
-    sibling = client.get_experiment_by_name(sibling_name)
-    if sibling is None:
-        exp_id = client.create_experiment(sibling_name, artifact_location=artifact_root_uri)
-        return sibling_name, str(exp_id)
-
-    sibling_location = str(getattr(sibling, "artifact_location", "") or "")
-    if _same_uri(sibling_location, artifact_root_uri):
-        return str(sibling.name), str(sibling.experiment_id)
-
-    unique_name = f"{sibling_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    exp_id = client.create_experiment(unique_name, artifact_location=artifact_root_uri)
-    return unique_name, str(exp_id)
+    logger.info(
+        f"Using existing experiment '{base_name}' (id={exp.experiment_id}). "
+        f"Run artifacts → {exp.artifact_location}"
+    )
+    return str(exp.name), str(exp.experiment_id)
 
 
 def _init_mlflow_state() -> dict[str, Any]:
@@ -212,16 +205,6 @@ def _init_mlflow_state() -> dict[str, Any]:
             cfg["experiment_name"],
             cfg["artifact_root_uri"],
         )
-        if active_experiment_name != cfg["experiment_name"]:
-            logger.warning(
-                "Experiment '%s' is configured with a different artifact location. "
-                "Using '%s' (id=%s) with artifact root '%s' instead.",
-                cfg["experiment_name"],
-                active_experiment_name,
-                active_experiment_id,
-                cfg["artifact_root_path"],
-            )
-            cfg["experiment_name"] = active_experiment_name
 
         mlflow.set_experiment(cfg["experiment_name"])
 

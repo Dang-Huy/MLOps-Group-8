@@ -1,0 +1,183 @@
+# name: CI
+
+# on:
+#   push:
+#     branches: [main, develop]
+#   pull_request:
+#     branches: [main]
+
+# jobs:
+#   lint-and-test:
+#     name: Lint & Test
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python 3.11
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+#           cache: pip
+
+#       - name: Install dependencies
+#         run: |
+#           pip install --upgrade pip
+#           pip install -r requirements-dev.txt
+
+#       - name: Lint with ruff
+#         run: ruff check src/ tests/
+
+#       - name: Run unit tests
+#         run: pytest tests/unit/ -v --tb=short
+
+#       - name: Run integration tests
+#         run: pytest tests/integration/ -v --tb=short
+#         continue-on-error: true
+
+#       - name: Run contract tests
+#         run: |
+#           if [ -d tests/contract ]; then
+#             pytest tests/contract/ -v --tb=short
+#           else
+#             echo "tests/contract not found, skipping contract tests"
+#           fi
+#         continue-on-error: true
+
+#   training:
+#     name: Train Model Bundle
+#     runs-on: ubuntu-latest
+#     needs: lint-and-test
+#     timeout-minutes: 90
+
+#     env:
+#       MLFLOW_ENABLED: "true"
+#       MLFLOW_TRACKING_URI: http://mlflow:5000
+#       MLFLOW_MODEL_NAME: credit_score_serving
+#       MLFLOW_MODEL_ALIAS: production
+#       MLFLOW_EXPERIMENT_NAME: credit-score-v1
+#       MLFLOW_EXPERIMENT_ID: 194323661774503133
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python 3.11
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+#           cache: pip
+
+#       - name: Install dependencies
+#         run: |
+#           pip install --upgrade pip
+#           pip install -r requirements-dev.txt
+
+#       - name: Start MLflow server
+#         run: |
+#           mkdir -p .temp/mlruns
+#           mlflow server \
+#             --host 127.0.0.1 \
+#             --port 5000 \
+#             --backend-store-uri sqlite:///mlflow_ci.db \
+#             --default-artifact-root .temp/mlruns \
+#             > mlflow_server.log 2>&1 &
+
+#       - name: Wait for MLflow readiness
+#         run: |
+#           for i in {1..60}; do
+#             if curl -fsS http://127.0.0.1:5000/health > /dev/null || curl -fsS http://127.0.0.1:5000/ > /dev/null; then
+#               echo "MLflow is ready"
+#               exit 0
+#             fi
+#             sleep 2
+#           done
+#           echo "MLflow failed to start"
+#           cat mlflow_server.log || true
+#           exit 1
+
+#       - name: Run training pipeline
+#         run: python -m src.pipelines.training_pipeline
+
+#       - name: Verify key training artifacts
+#         run: |
+#           test -f artifacts/models/final_model_bundle.pkl
+#           test -f artifacts/reports/final_model_comparison.csv
+#           test -f artifacts/reports/final_model_selection.json
+
+#       - name: Upload training artifacts
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: training-artifacts
+#           if-no-files-found: error
+#           path: |
+#             artifacts/models/**
+#             artifacts/reports/**
+#             artifacts/drift_reports/**
+#             artifacts/predictions/**
+
+#       - name: Upload MLflow logs on failure
+#         if: failure()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: mlflow-debug-logs
+#           if-no-files-found: ignore
+#           path: |
+#             mlflow_server.log
+#             mlflow_ci.db
+
+#   docker-build:
+#     name: Docker Build Check
+#     runs-on: ubuntu-latest
+#     needs: training
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Download training artifacts
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: training-artifacts
+#           path: .
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+
+#       - name: Build Docker image (no push)
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           file: ./Dockerfile
+#           target: runtime
+#           push: false
+#           tags: credit-score-api:ci
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+
+#   docker-push:
+#     name: Push to Registry
+#     runs-on: ubuntu-latest
+#     needs: docker-build
+#     if: github.ref == 'refs/heads/main'
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Log in to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#       - name: Build and push Docker image
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           file: ./Dockerfile
+#           target: runtime
+#           push: true
+#           tags: |
+#             ${{ secrets.DOCKERHUB_USERNAME }}/mlops-group8:latest
+#             ${{ secrets.DOCKERHUB_USERNAME }}/mlops-group8:${{ github.sha }}
