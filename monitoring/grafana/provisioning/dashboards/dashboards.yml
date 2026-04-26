@@ -1,11 +1,10 @@
 apiVersion: 1
 
 providers:
-  - name: Credit Score Dashboards
-    orgId: 1
-    folder: ""
+  - name: credit-score
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30
     options:
-      path: /etc/grafana/dashboards
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
