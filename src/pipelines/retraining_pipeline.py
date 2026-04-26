@@ -31,6 +31,8 @@ Drift thresholds
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import argparse
 import sys
 import time
@@ -262,7 +264,7 @@ def run_retraining_pipeline(
     new_bundle = run_training_pipeline()
     result["retrained"] = True
     result["reason"]    = "force" if force else "drift_threshold_exceeded"
-    logger.info(f"   Retraining complete.")
+    logger.info("   Retraining complete.")
 
     # ── 4. Compare new vs. old ────────────────────────────────────────────────
     logger.info("\n-- 4. Model comparison --")

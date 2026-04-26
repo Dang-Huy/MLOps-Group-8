@@ -24,6 +24,8 @@ Usage
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import argparse
 import sys
 import time
@@ -33,7 +35,6 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import numpy as np
 import pandas as pd
 
 from src.serving.batch_scoring    import score_file
@@ -41,7 +42,7 @@ from src.monitoring.input_monitor import monitor_input, save_input_monitor_repor
 from src.monitoring.output_monitor import monitor_output
 from src.monitoring.drift_monitor  import run_drift_check
 from src.utils.logger              import get_logger
-from src.utils.io                  import write_json, write_csv
+from src.utils.io                  import write_json
 
 logger     = get_logger(__name__)
 REPORT_DIR = ROOT / "artifacts" / "reports"
@@ -144,7 +145,7 @@ def run_scoring_pipeline(
             status = psi_report.get("overall_status", "unknown")
             write_json(psi_report, REPORT_DIR / "scoring_feature_drift.json")
             if status == "ALERT":
-                logger.warning(f"   Feature drift ALERT -- PSI exceeds threshold.")
+                logger.warning("   Feature drift ALERT -- PSI exceeds threshold.")
             elif status == "skipped":
                 logger.info("   Feature drift check skipped (no reference found).")
             else:

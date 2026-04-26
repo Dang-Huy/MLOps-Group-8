@@ -18,9 +18,8 @@ Design rules
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
-import numpy as np
 import pandas as pd
 
 
@@ -243,7 +242,9 @@ def impute_missing(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import argparse, joblib, os
+    import argparse
+    import joblib
+    import os
 
     parser = argparse.ArgumentParser(description="Impute missing values.")
     parser.add_argument("--train",   required=True)

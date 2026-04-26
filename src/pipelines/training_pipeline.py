@@ -34,6 +34,8 @@ Usage
 
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import json
 import os
 import sys
@@ -42,6 +44,7 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
@@ -125,16 +128,65 @@ def _normalize_mlflow_tracking_uri(uri: str) -> str:
 
 
 def _get_mlflow_config() -> dict[str, Any]:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=ROOT / ".env")
+    except ImportError:
+        pass
+
     default_tracking_uri = (ROOT / "mlruns").resolve().as_uri()
     tracking_uri = _normalize_mlflow_tracking_uri(
         os.getenv("MLFLOW_TRACKING_URI", default_tracking_uri)
     )
+    artifact_root = os.getenv("MLFLOW_ARTIFACT_ROOT", ".temp/mlruns")
+    artifact_root_path = Path(artifact_root).expanduser()
+    if not artifact_root_path.is_absolute():
+        artifact_root_path = ROOT / artifact_root_path
+    artifact_root_path = artifact_root_path.resolve()
+    artifact_root_path.mkdir(parents=True, exist_ok=True)
+
     return {
         "enabled": _env_bool("MLFLOW_ENABLED", default=True),
         "tracking_uri": tracking_uri,
+        "artifact_root_uri": artifact_root_path.as_uri(),
+        "artifact_root_path": str(artifact_root_path),
         "experiment_name": os.getenv("MLFLOW_EXPERIMENT_NAME", "CreditScoringTraining"),
         "run_name": os.getenv("MLFLOW_RUN_NAME", ""),
     }
+
+
+def _same_uri(left: str, right: str) -> bool:
+    return left.strip().rstrip("/").lower() == right.strip().rstrip("/").lower()
+
+
+def _ensure_experiment_with_artifact_root(
+    client: Any,
+    base_name: str,
+    artifact_root_uri: str,
+) -> tuple[str, str]:
+    exp = client.get_experiment_by_name(base_name)
+    if exp is None:
+        exp_id = client.create_experiment(base_name, artifact_location=artifact_root_uri)
+        return base_name, str(exp_id)
+
+    current_location = str(getattr(exp, "artifact_location", "") or "")
+    if _same_uri(current_location, artifact_root_uri):
+        return str(exp.name), str(exp.experiment_id)
+
+    # Existing experiment points elsewhere; use a dedicated sibling experiment.
+    sibling_name = f"{base_name}_temp_mlruns"
+    sibling = client.get_experiment_by_name(sibling_name)
+    if sibling is None:
+        exp_id = client.create_experiment(sibling_name, artifact_location=artifact_root_uri)
+        return sibling_name, str(exp_id)
+
+    sibling_location = str(getattr(sibling, "artifact_location", "") or "")
+    if _same_uri(sibling_location, artifact_root_uri):
+        return str(sibling.name), str(sibling.experiment_id)
+
+    unique_name = f"{sibling_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    exp_id = client.create_experiment(unique_name, artifact_location=artifact_root_uri)
+    return unique_name, str(exp_id)
 
 
 def _init_mlflow_state() -> dict[str, Any]:
@@ -151,15 +203,40 @@ def _init_mlflow_state() -> dict[str, Any]:
 
     try:
         import mlflow  # type: ignore
+        from mlflow.tracking import MlflowClient  # type: ignore
 
         mlflow.set_tracking_uri(cfg["tracking_uri"])
+        client = MlflowClient()
+        active_experiment_name, active_experiment_id = _ensure_experiment_with_artifact_root(
+            client,
+            cfg["experiment_name"],
+            cfg["artifact_root_uri"],
+        )
+        if active_experiment_name != cfg["experiment_name"]:
+            logger.warning(
+                "Experiment '%s' is configured with a different artifact location. "
+                "Using '%s' (id=%s) with artifact root '%s' instead.",
+                cfg["experiment_name"],
+                active_experiment_name,
+                active_experiment_id,
+                cfg["artifact_root_path"],
+            )
+            cfg["experiment_name"] = active_experiment_name
+
         mlflow.set_experiment(cfg["experiment_name"])
+
+        tracking_scheme = urlparse(cfg["tracking_uri"]).scheme.lower()
+        if tracking_scheme in {"http", "https"}:
+            logger.info(
+                "Tracking server mode detected; experiment artifact location is managed by registry metadata."
+            )
         state["enabled"] = True
         state["mlflow"] = mlflow
         logger.info(
-            "MLflow enabled: tracking_uri=%s, experiment=%s",
+            "MLflow enabled: tracking_uri=%s, experiment=%s, artifact_root=%s",
             cfg["tracking_uri"],
             cfg["experiment_name"],
+            cfg["artifact_root_path"],
         )
     except Exception as e:
         logger.warning("MLflow unavailable, continue without tracking: %s", e)
@@ -280,8 +357,7 @@ def _safe_mlflow_log_model(
 def _build_models() -> dict:
     """Return 5 untrained sklearn-compatible classifiers."""
     from sklearn.linear_model  import LogisticRegression
-    from sklearn.ensemble      import RandomForestClassifier, ExtraTreesClassifier, VotingClassifier
-    from sklearn.utils.class_weight import compute_class_weight
+    from sklearn.ensemble      import RandomForestClassifier, ExtraTreesClassifier
 
     models: dict = {}
 
@@ -989,8 +1065,8 @@ def run_training_pipeline() -> ModelBundle:
     y_pred_test = np.argmax(y_prob_test, axis=1)
 
     sample_df = X_test.head(200).copy().reset_index(drop=True)
-    sample_df["y_true"]             = [LABEL_MAP[l] for l in y_test[:200]]
-    sample_df["y_pred"]             = [LABEL_MAP[l] for l in y_pred_test[:200]]
+    sample_df["y_true"]             = [LABEL_MAP[label_idx] for label_idx in y_test[:200]]
+    sample_df["y_pred"]             = [LABEL_MAP[label_idx] for label_idx in y_pred_test[:200]]
     sample_df["correct"]            = sample_df["y_true"] == sample_df["y_pred"]
     for k, cls in enumerate(CLASS_LABELS):
         sample_df[f"prob_{cls}"] = y_prob_test[:200, k]
@@ -1063,7 +1139,7 @@ def run_training_pipeline() -> ModelBundle:
     _safe_mlflow_log_dir(mlflow_state, DRIFT_DIR, artifact_path="drift_reports")
     _safe_mlflow_log_artifact(mlflow_state, bundle_path, artifact_path="models")
 
-    registered_model_name = f"{final_model_name}_serving"
+    registered_model_name = "credit_score_serving"
     logged_model = _safe_mlflow_log_model(
         mlflow_state,
         serving_model,
@@ -1075,18 +1151,18 @@ def run_training_pipeline() -> ModelBundle:
 
     # Register in model registry
     register_model(
-        model_name    = final_model_name,
+        model_name    = registered_model_name,
         version       = "1.0.0",
         artifact_path = bundle_path,
         metrics       = final_metrics if isinstance(final_metrics, dict) else {},
         tags          = {"pipeline": "training_pipeline_v1"},
     )
-    promote_to_production(final_model_name, "1.0.0")
+    promote_to_production(registered_model_name, "1.0.0")
 
     total_time = round(time.time() - t_start, 1)
     _safe_mlflow_log_metric(mlflow_state, "training_time_total", total_time)
     logger.info(f"\n== PIPELINE COMPLETE in {total_time}s ======================")
-    logger.info(f"  Final model      : {final_model_name}")
+    logger.info(f"  Final model      : {registered_model_name}")
     logger.info(f"  Bundle           : {bundle_path}")
     logger.info(f"  Reports dir      : {REPORT_DIR}")
     _mlflow_end_run(mlflow_state)

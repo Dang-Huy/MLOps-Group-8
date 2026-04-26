@@ -19,8 +19,8 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# curl is needed for Docker Compose healthchecks (python:3.11-slim ships none)
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# curl is needed for Docker Compose healthchecks; libgomp1 is required by LightGBM runtime
+RUN apt-get update && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder

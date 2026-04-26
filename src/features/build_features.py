@@ -116,8 +116,8 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     for feature_name, feature_fn in DERIVED_FEATURES.items():
         values = feature_fn(df)
-        # Replace +/-inf (from divide-by-zero when denominator is non-NaN zero)
-        df[feature_name] = values.replace([np.inf, -np.inf], np.nan)
+        # Replace +/-inf then fill NaN with 0 (zero denominator = no activity)
+        df[feature_name] = values.replace([np.inf, -np.inf], np.nan).fillna(0)
 
     print(f"[build_features] Added {len(DERIVED_FEATURES)} derived features.")
     print(f"  New columns: {list(DERIVED_FEATURES.keys())}")

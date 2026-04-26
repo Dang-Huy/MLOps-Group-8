@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   # ── FastAPI inference + web UI ──────────────────────────────────────────────
@@ -15,15 +13,18 @@ services:
     environment:
       # MLflow resolution: point to the mlflow service inside compose
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
-      MLFLOW_MODEL_NAME: "ensemble_soft_voting"
-      MLFLOW_MODEL_ALIAS: "Production"
+      MLFLOW_MODEL_NAME: "credit_score_serving"
+      MLFLOW_MODEL_ALIAS: "production"
       MLFLOW_EXPERIMENT_ID: "194323661774503133"
     volumes:
       # Mount artifacts so the JSON fallback and reports are accessible
       - ./artifacts:/app/artifacts:ro
       - ./data/reference:/app/data/reference:ro
+      # Mount MLflow artifact store so alias/stage source paths are readable by API
+      - ./.temp/mlruns:/mlflow/artifacts:ro
     depends_on:
-      - mlflow
+      mlflow:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -41,8 +42,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/mlflow/mlruns
-      - ./artifacts:/mlflow/artifacts
+      - ./.temp/mlruns:/mlflow/artifacts
       - mlflow_db:/mlflow/db
     command: >
       mlflow server
@@ -50,12 +50,6 @@ services:
         --port 5000
         --backend-store-uri sqlite:////mlflow/db/mlflow.db
         --default-artifact-root /mlflow/artifacts
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
     restart: unless-stopped
     networks:
       - credit-score-net
@@ -75,7 +69,8 @@ services:
       - "--storage.tsdb.retention.time=15d"
       - "--web.enable-lifecycle"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - credit-score-net

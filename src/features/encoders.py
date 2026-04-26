@@ -21,7 +21,6 @@ from __future__ import annotations
 import warnings
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 
 warnings.filterwarnings("ignore")
@@ -286,7 +285,9 @@ def encode_features(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import argparse, joblib, os
+    import argparse
+    import joblib
+    import os
 
     parser = argparse.ArgumentParser(description="Encode categorical features.")
     parser.add_argument("--train",   required=True)

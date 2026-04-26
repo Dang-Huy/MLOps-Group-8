@@ -17,7 +17,7 @@ python -m src.pipelines.training_pipeline
 uvicorn deployment.fastapi.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open http://localhost:8000/ui/ in your browser.
+Open <http://localhost:8000/ui/> in your browser.
 
 ---
 
@@ -38,7 +38,7 @@ docker compose up --build
 
 ## Project Structure
 
-```
+```bash
 ├── src/
 │   ├── data/           # Loading, schema, preprocessing
 │   ├── features/       # Feature engineering, encoders, imputers
@@ -94,7 +94,7 @@ python -m src.pipelines.retraining_pipeline --new-data path/to/new_data.csv
 ## API Endpoints
 
 | Method | Path | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | GET | `/health` | Liveness + model version |
 | GET | `/model-info` | Full model metadata (JSON) |
 | POST | `/predict` | Single-record prediction |
@@ -130,7 +130,7 @@ curl -X POST http://localhost:8000/predict \
 ### Prometheus metrics (scraped from `/metrics`)
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | `credit_score_requests_total` | Counter | Requests by endpoint + status |
 | `credit_score_request_latency_ms` | Histogram | Latency in ms by endpoint |
 | `credit_score_predictions_by_class_total` | Counter | Predictions by class label |
@@ -139,7 +139,7 @@ curl -X POST http://localhost:8000/predict \
 
 ### Grafana dashboard
 
-Pre-provisioned at http://localhost:3000 → **Credit Score API** dashboard.  
+Pre-provisioned at <http://localhost:3000> → **Credit Score API** dashboard.  
 Panels: total predictions, error rate, request rate, p50/p95/p99 latency, class distribution pie.
 
 ---
@@ -196,7 +196,7 @@ pytest tests/contract/      # needs running server
 Production model: `ensemble_soft_voting` (LightGBM + XGBoost + Random Forest)
 
 | Metric | Value |
-|--------|-------|
+| -------- | ------- |
 | F1 Macro | 0.7876 |
 | Accuracy | 0.7959 |
 | AUC (OVR) | 0.9154 |
@@ -208,7 +208,7 @@ Production model: `ensemble_soft_voting` (LightGBM + XGBoost + Random Forest)
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | [docs/architecture.md](docs/architecture.md) | System components, data flow, model resolution chain |
 | [docs/api_spec.md](docs/api_spec.md) | REST API reference with request/response schemas |
 | [docs/runbook.md](docs/runbook.md) | Operations guide: startup, retraining, troubleshooting |

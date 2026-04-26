@@ -77,7 +77,10 @@ def run_all_checks(
     p95_ms: float | None = None,
 ) -> list[dict]:
     alerts = []
-    if psi_max  is not None: alerts.extend(filter(None, [check_drift_alert(psi_max)]))
-    if f1_macro is not None: alerts.extend(filter(None, [check_performance_alert(f1_macro)]))
-    if p95_ms   is not None: alerts.extend(filter(None, [check_latency_alert(p95_ms)]))
+    if psi_max is not None:
+        alerts.extend(filter(None, [check_drift_alert(psi_max)]))
+    if f1_macro is not None:
+        alerts.extend(filter(None, [check_performance_alert(f1_macro)]))
+    if p95_ms is not None:
+        alerts.extend(filter(None, [check_latency_alert(p95_ms)]))
     return alerts

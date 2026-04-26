@@ -1,0 +1,20 @@
+project:
+  name: credit-score-classification
+  version: "1.0.0"
+  description: MLOps pipeline for credit score classification
+
+data:
+  raw_train: data/raw/train_raw.csv
+  raw_test: data/raw/test_raw.csv
+  processed_dir: data/processed
+
+model:
+  target: Credit_Score
+  random_state: 42
+  test_size: 0.15
+  valid_size: 0.15
+
+artifacts:
+  models_dir: artifacts/models
+  reports_dir: artifacts/reports
+  figures_dir: artifacts/reports/figures

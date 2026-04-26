@@ -5,5 +5,5 @@ metadata:
   namespace: credit-score
 data:
   mlflow_tracking_uri: "http://mlflow:5000"
-  mlflow_model_name: "lightgbm"
+  mlflow_model_name: "credit_score_serving"
   mlflow_experiment_id: "194323661774503133"

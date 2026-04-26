@@ -5,6 +5,8 @@ Deployment orchestration -- validate then promote the model.
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import shutil
 import sys
 from pathlib import Path
@@ -14,7 +16,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.pipelines.validation_pipeline import run_validation_pipeline
-from src.models.registry import promote_to_production
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)

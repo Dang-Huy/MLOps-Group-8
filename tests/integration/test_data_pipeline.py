@@ -1,4 +1,6 @@
 """Integration tests for the full data pipeline."""
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -7,7 +9,6 @@ sys.path.insert(0, str(ROOT))
 import warnings
 warnings.filterwarnings("ignore")
 import numpy as np
-import pandas as pd
 import pytest
 
 RAW_TRAIN = ROOT / "data" / "raw" / "train_raw.csv"

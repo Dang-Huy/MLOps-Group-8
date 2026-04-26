@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import pandas as pd
-import numpy as np
 from datetime import datetime
 
 from src.risk.psi import compute_psi, psi_summary

@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 REPO_ROOT    = Path(__file__).resolve().parent.parent.parent
@@ -64,6 +63,9 @@ class ModelBundle:
 
         # 4. Build features
         df = build_features(df)
+
+        # Fill any NaN produced by ratio features (zero-denominator rows)
+        df = df.fillna(0)
 
         # 5. Select
         feature_cols = [c for c in self.selector.feature_names_out if c in df.columns]

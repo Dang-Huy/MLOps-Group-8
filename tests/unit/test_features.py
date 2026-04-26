@@ -1,4 +1,6 @@
 """Unit tests for src/features/"""
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -8,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from src.features.build_features import build_features, DERIVED_FEATURES
-from src.features.encoders import OrdinalEncoder, OneHotEncoder, CategoricalEncoderPipeline
+from src.features.encoders import OrdinalEncoder, OneHotEncoder
 from src.features.imputers import MedianImputer, ModeImputer
 
 
@@ -92,7 +94,6 @@ def test_median_imputer():
 
 
 def test_mode_imputer():
-    from src.features.imputers import ModeImputer
     imp = ModeImputer(["cat"])
     df = pd.DataFrame({"cat": ["A", "A", "B", None]})
     result = imp.fit_transform(df)

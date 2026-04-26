@@ -4,7 +4,6 @@ src/risk/fairness.py
 Fairness diagnostics -- checks for differential performance across subgroups.
 Uses Occupation as the available group attribute (PII dropped).
 """
-import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score, accuracy_score
 

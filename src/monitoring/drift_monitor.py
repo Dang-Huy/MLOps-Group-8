@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.risk.psi import compute_psi, psi_summary
-from src.utils.io import write_csv, read_parquet, write_json
+from src.utils.io import write_csv, read_parquet
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
