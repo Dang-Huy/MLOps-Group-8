@@ -427,7 +427,7 @@ pytest tests/contract/      # needs running server
 
 ## Model Results (Ensemble Soft Voting, test set — 15k samples)
 
-Production model: `ensemble_soft_voting` (LightGBM + XGBoost + Random Forest)
+Production model: `credit_score_serving` (LightGBM)
 
 | Metric | Value |
 | -------- | ------- |

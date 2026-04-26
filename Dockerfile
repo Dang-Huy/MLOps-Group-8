@@ -36,9 +36,10 @@ COPY data/reference ./data/reference
 # Environment defaults (overridable via docker run -e or docker-compose)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    MLFLOW_TRACKING_URI="" \
-    MLFLOW_MODEL_NAME="" \
+    MLFLOW_TRACKING_URI="http://mlflow:5000" \
+    MLFLOW_MODEL_NAME="credit_score_serving" \
     MLFLOW_MODEL_ALIAS="production" \
+    MLFLOW_EXPERIMENT_NAME="credit-score-v1" \
     # MLFLOW_EXPERIMENT_ID="194323661774503133" \
     MODEL_PATH_FALLBACK="" 
 
