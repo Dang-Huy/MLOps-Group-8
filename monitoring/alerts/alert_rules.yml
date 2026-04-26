@@ -1,0 +1,44 @@
+groups:
+  - name: credit_score_api
+    interval: 30s
+    rules:
+      - alert: ModelNotLoaded
+        expr: credit_score_model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Credit score model is not loaded"
+          description: "The inference model has not been loaded for more than 1 minute."
+
+      - alert: APIDown
+        expr: up{job="credit_score_api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Credit score API is unreachable"
+          description: "Prometheus cannot scrape the credit score API at {{ $labels.instance }}."
+
+      - alert: HighErrorRate
+        expr: |
+          rate(credit_score_requests_total{status="error"}[5m])
+          / rate(credit_score_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High prediction error rate (>5%)"
+          description: "Error rate is {{ printf \"%.1f\" (mul $value 100) }}% over the last 5 minutes."
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            rate(credit_score_request_latency_ms_bucket[5m])
+          ) > 500
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 prediction latency exceeds 500 ms"
+          description: "p95 latency is {{ printf \"%.0f\" $value }} ms over the last 5 minutes."

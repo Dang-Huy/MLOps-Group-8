@@ -60,4 +60,8 @@ htmlcov/
 # MLflow
 mlruns/
 mlartifacts/
+mlflow.db
 .temp
+
+# Processed data (large, reproducible from pipeline)
+data/processed/*.csv

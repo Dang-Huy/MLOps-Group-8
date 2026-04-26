@@ -32,7 +32,7 @@ def test_full_data_pipeline_produces_clean_feature_matrix():
     train_r, valid_r, test_r = split_train_valid_test(
         train_full, train_size=0.70, valid_size=0.15, test_size=0.15
     )
-    train_c, valid_c, test_c = preprocess(train_r, valid_r, test_r)
+    train_c, valid_c, test_c, _ = preprocess(train_r, valid_r, test_r)
     test_c = encode_target(test_c)
 
     imputer, train_i, valid_i, test_i = impute_missing(train_c, valid_c, test_c)

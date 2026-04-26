@@ -156,17 +156,17 @@ def parse_credit_history_age(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def clean_categorical_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Replace known garbage placeholders with NaN for later imputation."""
+    """Replace known garbage placeholders with NaN for later imputation. Skips missing columns."""
     df = df.copy()
     replacements = {
-        "Occupation": "_______",
-        "Credit_Mix": "_",
-        "Payment_Behaviour": "!@9#%8",
+        "Occupation":            "_______",
+        "Credit_Mix":            "_",
+        "Payment_Behaviour":     "!@9#%8",
         "Payment_of_Min_Amount": "NM",
     }
-    for col, bad_value in replacements.items():
+    for col, bad_val in replacements.items():
         if col in df.columns:
-            df[col] = df[col].replace(bad_value, np.nan)
+            df[col] = df[col].replace(bad_val, np.nan)
     return df
 
 
@@ -211,12 +211,12 @@ def preprocess(
     train_raw: pd.DataFrame,
     valid_raw: pd.DataFrame,
     test_raw:  pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
     """
     Run the full preprocessing sequence on all three splits.
     Outlier caps are computed from train and applied to valid/test.
 
-    Returns (train_clean, valid_clean, test_clean)
+    Returns (train_clean, valid_clean, test_clean, income_cap)
     """
     steps = [
         drop_pii_columns,
@@ -244,4 +244,4 @@ def preprocess(
     valid = encode_target(valid)
 
     print(f"[preprocessing] Done — train {train.shape}, valid {valid.shape}, test {test.shape}")
-    return train, valid, test
+    return train, valid, test, income_cap
