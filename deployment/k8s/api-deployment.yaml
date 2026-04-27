@@ -19,14 +19,31 @@ spec:
         prometheus.io/path: "/metrics"
         prometheus.io/port: "8000"
     spec:
+      # --- CHIẾN THUẬT LÁCH LUẬT: DÙNG INIT CONTAINER ---
+      initContainers:
+      - name: model-provider
+        image: ruoc188/ml-models:latest # Image chứa file .pkl của bạn
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "cp /models/serving_model_bundle.pkl /shared-model/"]
+        volumeMounts:
+        - name: model-shared-storage
+          mountPath: /shared-model/
+
       containers:
         - name: api
-          image: ruoc188/mlops-group8:latest
+          image: ruoc188/mlops-group8:v1.0 # Image API cũ, không cần sửa
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: http
           env:
+            # 1. Biến môi trường để kích hoạt logic load model tại chỗ
+            - name: USE_BAKED_MODEL
+              value: "true"
+            - name: MODEL_PATH_BAKED
+              value: "/app/models/serving_model_bundle.pkl"
+
+            # 2. Giữ các biến MLflow cũ để dự phòng/khi chạy local
             - name: MLFLOW_TRACKING_URI
               valueFrom:
                 configMapKeyRef:
@@ -47,6 +64,7 @@ spec:
                 configMapKeyRef:
                   name: credit-score-config
                   key: MLFLOW_EXPERIMENT_NAME
+          
           resources:
             requests:
               cpu: "250m"
@@ -54,6 +72,7 @@ spec:
             limits:
               cpu: "1000m"
               memory: "2Gi"
+          
           livenessProbe:
             httpGet:
               path: /health
@@ -61,6 +80,7 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 30
             failureThreshold: 3
+          
           readinessProbe:
             httpGet:
               path: /health
@@ -68,11 +88,21 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
+          
           volumeMounts:
+            # Vùng đệm chứa model lấy từ InitContainer
+            - name: model-shared-storage
+              mountPath: /app/models
+            # PVC cũ của bạn (vẫn giữ nếu bạn cần dùng cho mục đích khác)
             - name: artifacts
               mountPath: /app/artifacts
               readOnly: true
+      
       volumes:
+        # Khai báo vùng đệm chia sẻ trong bộ nhớ Pod
+        - name: model-shared-storage
+          emptyDir: {}
+        # PVC artifacts hiện có
         - name: artifacts
           persistentVolumeClaim:
             claimName: credit-score-artifacts-pvc

@@ -1,0 +1,2 @@
+FROM busybox
+COPY artifacts/models/serving_model_bundle.pkl /models/serving_model_bundle.pkl

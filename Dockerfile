@@ -41,7 +41,7 @@ ENV PYTHONUNBUFFERED=1 \
     MLFLOW_MODEL_ALIAS="production" \
     MLFLOW_EXPERIMENT_NAME="credit-score-v1" \
     # MLFLOW_EXPERIMENT_ID="194323661774503133" \
-    MODEL_PATH_FALLBACK="" 
+    MODEL_PATH_FALLBACK="/app/artifacts/models/final_model_bundle.pkl"
 
 EXPOSE 8000
 

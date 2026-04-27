@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 
 SourceResolvedFrom = Literal[
     "mlflow_alias_production",
-    # "mlflow_stage_production",
     "json_fallback",
+    "baked_local_artifact",
 ]
 
 
@@ -41,20 +41,34 @@ class ResolvedModelMetadata:
 
 
 def resolve_model(config: AppConfig | None = None) -> ResolvedModelMetadata:
-    """Resolve model metadata and artifact path with MLflow-first priority."""
     cfg = config or load_config()
     warnings: list[str] = []
     errors: list[str] = []
 
+    # Strategy for k8s: Check for baked model first, then MLflow alias, then JSON fallback
+    use_baked = os.getenv("USE_BAKED_MODEL", "false").lower() == "true"
+    baked_path = os.getenv("MODEL_PATH_BAKED", "/app/artifacts/models/serving_model_bundle.pkl")
+
+    if use_baked and Path(baked_path).exists():
+        logger.info(f"--- [MODE: BAKED] Loading baked model from: {baked_path} ---")
+        return ResolvedModelMetadata(
+            model_path=Path(baked_path),
+            model_name=config.mlflow_model_name,
+            model_version="baked-stable", # Đánh dấu phiên bản cố định
+            model_source="local_filesystem",
+            run_id="baked_run_id",
+            alias_or_stage="production",
+            source_resolved_from="baked_local_artifact", # Bạn có thể thêm Literal này vào SourceResolvedFrom
+            metrics_core={}, # Có thể để trống hoặc load từ 1 file json đi kèm
+            # warnings=["Using manually baked model image. MLflow connection bypassed."]
+        )
+
+    # Strategy for docker compose or local dev: MLflow alias → JSON fallback
     client = _init_mlflow_client(cfg, warnings, errors)
     if client is not None:
         alias_result = _resolve_from_mlflow_alias(client, cfg, warnings, errors)
         if alias_result is not None:
             return alias_result
-
-        # stage_result = _resolve_from_mlflow_stage(client, cfg, warnings, errors)
-        # if stage_result is not None:
-        #     return stage_result
 
     return _resolve_from_json_fallback(cfg, warnings, errors)
 
@@ -116,67 +130,6 @@ def _resolve_from_mlflow_alias(
         warnings.append(msg)
         errors.append(msg)
         return None
-
-
-# def _resolve_from_mlflow_stage(
-#     client: Any,
-#     cfg: AppConfig,
-#     warnings: list[str],
-#     errors: list[str],
-# ) -> ResolvedModelMetadata | None:
-#     logger.info("Resolving model by MLflow stage '.%s' for '%s'.", cfg.mlflow_model_stage, cfg.mlflow_model_name)
-#     model_versions: list[Any] = []
-
-#     try:
-#         model_versions = list(client.get_latest_versions(cfg.mlflow_model_name, stages=[cfg.mlflow_model_stage]))
-#     except Exception as exc:
-#         msg = f"Failed to query MLflow latest {cfg.mlflow_model_stage} version: {exc}"
-#         logger.warning(msg)
-#         warnings.append(msg)
-#         errors.append(msg)
-
-#     if not model_versions:
-#         try:
-#             versions = client.search_model_versions(f"name='{cfg.mlflow_model_name}'")
-#             model_versions = [mv for mv in versions if str(getattr(mv, "current_stage", "")).lower() == cfg.mlflow_model_stage.lower()]
-#         except Exception as exc:
-#             msg = f"Could not search model versions in MLflow: {exc}"
-#             logger.warning(msg)
-#             warnings.append(msg)
-#             errors.append(msg)
-#             return None
-
-#     if not model_versions:
-#         msg = f"No {cfg.mlflow_model_stage} stage model version found in MLflow for '{cfg.mlflow_model_name}'."
-#         logger.warning(msg)
-#         warnings.append(msg)
-#         errors.append(msg)
-#         return None
-
-#     sorted_versions = sorted(
-#         model_versions,
-#         key=lambda mv: int(str(getattr(mv, "version", "0")) or "0"),
-#         reverse=True,
-#     )
-
-#     for mv in sorted_versions:
-#         try:
-#             return _build_mlflow_result(
-#                 client=client,
-#                 cfg=cfg,
-#                 model_version=mv,
-#                 source_resolved_from="mlflow_stage_production",
-#                 alias_or_stage=f"stage:{cfg.mlflow_model_stage}",
-#                 warnings=warnings,
-#             )
-#         except Exception as exc:
-#             msg = f"{cfg.mlflow_model_stage} stage version metadata missing or not parseable: {exc}"
-#             logger.warning(msg)
-#             warnings.append(msg)
-#             errors.append(msg)
-
-#     return None
-
 
 def _build_mlflow_result(
     client: Any,

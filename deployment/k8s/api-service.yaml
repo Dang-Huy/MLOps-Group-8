@@ -10,7 +10,7 @@ spec:
     app: credit-score-api
   ports:
     - name: http
-      port: 80
+      port: 80    
       targetPort: 8000
-      protocol: TCP
-  type: ClusterIP
+      nodePort: 30100  
+  type: NodePort

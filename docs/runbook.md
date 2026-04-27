@@ -4,6 +4,21 @@ Operational guide for the Credit Score MLOps system.
 
 ---
 
+## 🪟 Windows Users: Quick Start
+
+If you're on **Windows**, see [**windows-setup.md**](./windows-setup.md) for a complete guide to install all tools via **Chocolatey**, then come back here.
+
+TL;DR for Windows:
+
+```powershell
+# In Admin PowerShell
+choco install docker-desktop kubectl kind make -y
+
+# Then follow "Step 1" below
+```
+
+---
+
 ## End-to-End Run Order
 
 Follow this sequence when setting up and running the project from scratch.
@@ -184,90 +199,48 @@ docker compose up -d grafana
 
 ---
 
-## Kubernetes Deployment (Same Flow as README)
+## Kubernetes Deployment with Make
 
-Use this flow when you already have the API image in local Docker and do not want to pull from Docker Hub.
+For detailed Kubernetes deployment instructions, **see README.md → "Kubernetes Deployment" section**.
 
-Prerequisites:
-
-- kubectl is installed and connected (`kubectl cluster-info`)
-- Kubernetes is enabled (for example Docker Desktop Kubernetes)
-- Local image exists (example: ruoc188/mlops-group8:latest)
-- deployment/k8s/api-deployment.yaml uses imagePullPolicy IfNotPresent (or Never)
-
-Step-by-step:
+### Quick Start (using Makefile)
 
 ```bash
-# 0) Verify local image exists
-docker image inspect ruoc188/mlops-group8:latest
+# 1. Full deployment from scratch
+make all
 
-# If missing, build locally
-docker build -t ruoc188/mlops-group8:latest .
+# 2. Port-forward to localhost:8000 (in a new terminal)
+make web
 
-# If using kind
-kind load docker-image ruoc188/mlops-group8:latest
+# 3. Test the API
+curl http://localhost:8000/health
+open http://localhost:8000/docs
 
-# If using minikube
-minikube image load ruoc188/mlops-group8:latest
+# 4. View logs
+make logs
 
-# 1) Create namespace
-kubectl apply -f deployment/k8s/namespace.yaml
-
-# 2) Apply runtime config
-kubectl apply -f deployment/k8s/configmap.yaml
-
-# 3) Optional storage claim
-kubectl apply -f deployment/k8s/pvc.yaml
-
-# 4) Deploy API
-kubectl apply -f deployment/k8s/api-deployment.yaml
-
-# 5) Create service
-kubectl apply -f deployment/k8s/api-service.yaml
-
-# 6) Optional autoscaling
-kubectl apply -f deployment/k8s/hpa.yaml
-
-# 7) Wait for ready pods
-kubectl -n credit-score rollout status deploy/credit-score-api --timeout=180s
-
-# 8) Inspect resources
-kubectl -n credit-score get pods,svc,hpa,pvc
-
-# 9) Inspect logs
-kubectl -n credit-score logs deploy/credit-score-api --tail=200
-
-# 10) Forward service to local machine
-kubectl -n credit-score port-forward svc/credit-score-api 8000:80
+# 5. Cleanup when done
+make clean
 ```
 
-After port-forward is running:
+### Available Make Commands
 
-- <http://127.0.0.1:8000/ui/>
-- <http://127.0.0.1:8000/docs>
-- <http://127.0.0.1:8000/health>
-- <http://127.0.0.1:8000/model-info>
+| Command | Purpose |
+| --------- | --------- |
+| `make all` | Create cluster → deploy → show status |
+| `make cluster` | Create kind cluster only |
+| `make deploy` | Deploy manifests to existing cluster |
+| `make status` | Show pods, services, HPA |
+| `make logs` | Stream API logs |
+| `make web` | Port-forward to localhost:8000 |
+| `make clean` | Delete cluster |
+| `make describe` | Show deployment details |
+| `make events` | Show recent events |
+| `make shell` | Open shell in API pod |
 
-Cleanup:
+### For Manual kubectl Commands
 
-```bash
-kubectl delete -f deployment/k8s/hpa.yaml --ignore-not-found
-kubectl delete -f deployment/k8s/api-service.yaml
-kubectl delete -f deployment/k8s/api-deployment.yaml
-kubectl delete -f deployment/k8s/pvc.yaml --ignore-not-found
-kubectl delete -f deployment/k8s/configmap.yaml
-kubectl delete -f deployment/k8s/namespace.yaml
-```
-
-Optional monitoring stack:
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install monitoring prometheus-community/kube-prometheus-stack \
-    -n monitoring --create-namespace \
-    -f deployment/k8s/helm-values.yaml
-```
+If you prefer fine-grained control, see the detailed manual steps in **README.md → "Manual K8s Commands"**.
 
 ---
 
